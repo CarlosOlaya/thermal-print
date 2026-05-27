@@ -2,7 +2,13 @@
   "name": "@foodly/thermal-print",
   "version": "0.1.0",
   "description": "Foodly thermal receipt renderers shared by print-server and dashboard Bluetooth Web.",
-  "private": true,
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CarlosOlaya/thermal-print.git"
+  },
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
