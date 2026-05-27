@@ -1,0 +1,33 @@
+{
+  "name": "@foodly/thermal-print",
+  "version": "0.1.0",
+  "description": "Foodly thermal receipt renderers shared by print-server and dashboard Bluetooth Web.",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "clean": "node ./scripts/clean.mjs",
+    "build": "npm run clean && node ./scripts/build.mjs && tsc -p tsconfig.types.json",
+    "test": "npm run build && node ./test/renderers.test.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0",
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
