@@ -19,3 +19,12 @@ const bytes = textToEscPosBytes(text);
 - `@foodly/thermal-print`: renderiza tirillas.
 - `print-server`: transporta a impresora local.
 - `dashboard-foodly`: transporta por Web Serial cuando hay Bluetooth conectado.
+
+
+
+npm test
+git add .
+git commit -m "..."
+git tag v0.1.1
+git push origin main
+git push origin v0.1.1
