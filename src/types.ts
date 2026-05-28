@@ -80,3 +80,5 @@ export interface FacturaCerradaPayload {
   };
   [key: string]: unknown;
 }
+
+export type ThermalDocumentPayload = Record<string, unknown>;

@@ -1,0 +1,10 @@
+import type { ThermalDocumentPayload, ThermalRenderOptions } from '../types';
+export declare function renderPrecuenta(data: ThermalDocumentPayload, options?: ThermalRenderOptions): string;
+export declare function renderDatosCliente(data: ThermalDocumentPayload, options?: ThermalRenderOptions): string;
+export declare function renderCierreCaja(data: ThermalDocumentPayload, options?: ThermalRenderOptions): string;
+export declare function renderGastosTurno(data: ThermalDocumentPayload, options?: ThermalRenderOptions): string;
+export declare function renderFacturasTurno(data: ThermalDocumentPayload, options?: ThermalRenderOptions): string;
+export declare function renderVentasPLU(data: ThermalDocumentPayload, options?: ThermalRenderOptions): string;
+export declare function renderReporteVentas(data: ThermalDocumentPayload, options?: ThermalRenderOptions): string;
+export declare function renderCorreccion(data: ThermalDocumentPayload, options?: ThermalRenderOptions): string;
+export declare function renderNotaCredito(data: ThermalDocumentPayload, options?: ThermalRenderOptions): string;
