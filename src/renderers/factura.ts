@@ -1,4 +1,3 @@
-import { escBold } from '../escpos';
 import type { FacturaCerradaPayload, ItemEvento, PagoEventoItem, ThermalRenderOptions } from '../types';
 import {
   center,
@@ -26,7 +25,12 @@ export function renderFactura(factura: FacturaCerradaPayload, options: ThermalRe
   lines.push(sep);
   lines.push(center(factura.numero_factura || 'PEDIDO', width));
   lines.push(sep);
-  lines.push(`Fecha: ${formatDate(now, timezone)}        Hora: ${formatTime(now, timezone)}`);
+  if (width >= 42) {
+    lines.push(`Fecha: ${formatDate(now, timezone)}        Hora: ${formatTime(now, timezone)}`);
+  } else {
+    lines.push(`Fecha: ${formatDate(now, timezone)}`);
+    lines.push(`Hora:  ${formatTime(now, timezone)}`);
+  }
   lines.push(sanitizeText(factura.mesa_nombre || `Mesa: ${factura.mesa_numero || ''}`));
   lines.push(`Mesero: ${sanitizeText(factura.mesero || '')}`);
   lines.push(sep);
@@ -34,7 +38,6 @@ export function renderFactura(factura: FacturaCerradaPayload, options: ThermalRe
   renderItems(lines, factura.items || [], width, sep);
   renderTotals(lines, factura, width, sep2);
   renderPayments(lines, factura, width, sep);
-  renderDelivery(lines, factura, width, sep);
 
   lines.push('');
   lines.push(center('** SOLO PARA CONTROL INTERNO **', width));
@@ -170,20 +173,6 @@ function renderPayment(lines: string[], payment: PagoEventoItem, width: number, 
 
   lines.push(leftRight(`${method.padEnd(14, ' ')}:`, `$${formatMoney(amount)}`, width));
   if (tip > 0) lines.push(leftRight('  + Servicio:', `$${formatMoney(tip)}`, width));
-}
-
-function renderDelivery(lines: string[], factura: FacturaCerradaPayload, width: number, sep: string): void {
-  if (!factura.entrega) return;
-  const bold = escBold(true);
-  const boldOff = escBold(false);
-  lines.push('');
-  lines.push(bold + center('DATOS DE ENTREGA', width) + boldOff);
-  lines.push(sep);
-  if (factura.entrega.nombre) lines.push(`Nombre:    ${sanitizeText(factura.entrega.nombre)}`);
-  if (factura.entrega.telefono) lines.push(`Telefono:  ${sanitizeText(factura.entrega.telefono)}`);
-  if (factura.entrega.barrio) lines.push(`Barrio:    ${sanitizeText(factura.entrega.barrio)}`);
-  if (factura.entrega.direccion) lines.push(`Direccion: ${sanitizeText(factura.entrega.direccion)}`);
-  lines.push(sep);
 }
 
 function renderReason(lines: string[], reason: unknown, prefix = '      Motivo: '): void {

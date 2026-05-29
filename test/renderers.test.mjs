@@ -53,6 +53,7 @@ assert.match(factura, /DESC. MESA/);
 assert.match(factura, /Cliente frecuente/);
 assert.match(factura, /DOMICILIO/);
 assert.match(factura, /Nequi/);
+assert.doesNotMatch(factura, /DATOS DE ENTREGA/);
 
 const bytes = textToEscPosBytes(factura);
 assert.ok(bytes instanceof Uint8Array);

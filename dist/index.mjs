@@ -189,14 +189,18 @@ function renderFactura(factura, options = {}) {
   lines.push(sep);
   lines.push(center(factura.numero_factura || "PEDIDO", width));
   lines.push(sep);
-  lines.push(`Fecha: ${formatDate(now, timezone)}        Hora: ${formatTime(now, timezone)}`);
+  if (width >= 42) {
+    lines.push(`Fecha: ${formatDate(now, timezone)}        Hora: ${formatTime(now, timezone)}`);
+  } else {
+    lines.push(`Fecha: ${formatDate(now, timezone)}`);
+    lines.push(`Hora:  ${formatTime(now, timezone)}`);
+  }
   lines.push(sanitizeText(factura.mesa_nombre || `Mesa: ${factura.mesa_numero || ""}`));
   lines.push(`Mesero: ${sanitizeText(factura.mesero || "")}`);
   lines.push(sep);
   renderItems(lines, factura.items || [], width, sep);
   renderTotals(lines, factura, width, sep2);
   renderPayments(lines, factura, width, sep);
-  renderDelivery(lines, factura, width, sep);
   lines.push("");
   lines.push(center("** SOLO PARA CONTROL INTERNO **", width));
   lines.push(center("Gracias por su visita!", width));
@@ -312,19 +316,6 @@ function renderPayment(lines, payment, width, detailed, sep) {
   lines.push(leftRight(`${method.padEnd(14, " ")}:`, `$${formatMoney(amount)}`, width));
   if (tip > 0) lines.push(leftRight("  + Servicio:", `$${formatMoney(tip)}`, width));
 }
-function renderDelivery(lines, factura, width, sep) {
-  if (!factura.entrega) return;
-  const bold = escBold(true);
-  const boldOff = escBold(false);
-  lines.push("");
-  lines.push(bold + center("DATOS DE ENTREGA", width) + boldOff);
-  lines.push(sep);
-  if (factura.entrega.nombre) lines.push(`Nombre:    ${sanitizeText(factura.entrega.nombre)}`);
-  if (factura.entrega.telefono) lines.push(`Telefono:  ${sanitizeText(factura.entrega.telefono)}`);
-  if (factura.entrega.barrio) lines.push(`Barrio:    ${sanitizeText(factura.entrega.barrio)}`);
-  if (factura.entrega.direccion) lines.push(`Direccion: ${sanitizeText(factura.entrega.direccion)}`);
-  lines.push(sep);
-}
 function renderReason(lines, reason, prefix = "      Motivo: ") {
   if (reason) lines.push(`${prefix}${sanitizeText(reason)}`);
 }
@@ -341,7 +332,7 @@ function renderPrecuenta(data, options = {}) {
   const domicilio = num(data.recaudo_domicilio_monto);
   const mesaNombre = text(data.mesa_nombre || `MESA: ${data.mesa_numero || ""}`);
   const esDelivery = /domicilio|llevar/i.test(mesaNombre);
-  lines.push(`Fecha: ${formatDate(ctx.now, ctx.timezone)}        Hora: ${formatTime(ctx.now, ctx.timezone)}`);
+  pushDateTime(lines, ctx);
   lines.push(escBold(true) + mesaNombre + escBold(false));
   lines.push(`MESERO: ${text(data.mesero)}`);
   lines.push(ctx.sep);
@@ -669,7 +660,7 @@ function renderNotaCredito(data, options = {}) {
   if (data.numero_nota) lines.push(center(text(data.numero_nota), ctx.width));
   lines.push(ctx.sep2);
   lines.push(leftRight("Pedido anulado:", text(data.factura_original), ctx.width));
-  lines.push(`Fecha: ${formatDate(ctx.now, ctx.timezone)}        Hora: ${formatTime(ctx.now, ctx.timezone)}`);
+  pushDateTime(lines, ctx);
   lines.push(text(data.mesa_nombre || `Mesa: ${data.mesa_numero || ""}`));
   if (data.mesero) lines.push(`Mesero: ${text(data.mesero)}`);
   lines.push(ctx.sep);
@@ -869,6 +860,14 @@ function header(data, title, ctx) {
 }
 function renderReason2(lines, reason) {
   if (reason) lines.push(`      Motivo: ${text(reason)}`);
+}
+function pushDateTime(lines, ctx) {
+  if (ctx.width >= 42) {
+    lines.push(`Fecha: ${formatDate(ctx.now, ctx.timezone)}        Hora: ${formatTime(ctx.now, ctx.timezone)}`);
+    return;
+  }
+  lines.push(`Fecha: ${formatDate(ctx.now, ctx.timezone)}`);
+  lines.push(`Hora:  ${formatTime(ctx.now, ctx.timezone)}`);
 }
 function context(options) {
   const width = clampColumns(options.columns);

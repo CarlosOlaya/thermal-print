@@ -27,7 +27,7 @@ export function renderPrecuenta(data: ThermalDocumentPayload, options: ThermalRe
   const mesaNombre = text(data.mesa_nombre || `MESA: ${data.mesa_numero || ''}`);
   const esDelivery = /domicilio|llevar/i.test(mesaNombre);
 
-  lines.push(`Fecha: ${formatDate(ctx.now, ctx.timezone)}        Hora: ${formatTime(ctx.now, ctx.timezone)}`);
+  pushDateTime(lines, ctx);
   lines.push(escBold(true) + mesaNombre + escBold(false));
   lines.push(`MESERO: ${text(data.mesero)}`);
   lines.push(ctx.sep);
@@ -395,7 +395,7 @@ export function renderNotaCredito(data: ThermalDocumentPayload, options: Thermal
   if (data.numero_nota) lines.push(center(text(data.numero_nota), ctx.width));
   lines.push(ctx.sep2);
   lines.push(leftRight('Pedido anulado:', text(data.factura_original), ctx.width));
-  lines.push(`Fecha: ${formatDate(ctx.now, ctx.timezone)}        Hora: ${formatTime(ctx.now, ctx.timezone)}`);
+  pushDateTime(lines, ctx);
   lines.push(text(data.mesa_nombre || `Mesa: ${data.mesa_numero || ''}`));
   if (data.mesero) lines.push(`Mesero: ${text(data.mesero)}`);
   lines.push(ctx.sep);
@@ -613,6 +613,16 @@ function header(data: ThermalDocumentPayload, title: string, ctx: Ctx): string[]
 
 function renderReason(lines: string[], reason: unknown): void {
   if (reason) lines.push(`      Motivo: ${text(reason)}`);
+}
+
+function pushDateTime(lines: string[], ctx: Ctx): void {
+  if (ctx.width >= 42) {
+    lines.push(`Fecha: ${formatDate(ctx.now, ctx.timezone)}        Hora: ${formatTime(ctx.now, ctx.timezone)}`);
+    return;
+  }
+
+  lines.push(`Fecha: ${formatDate(ctx.now, ctx.timezone)}`);
+  lines.push(`Hora:  ${formatTime(ctx.now, ctx.timezone)}`);
 }
 
 interface Ctx {
