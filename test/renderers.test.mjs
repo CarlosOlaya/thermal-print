@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import {
   renderCierreCaja,
   renderComanda,
+  renderCorreccion,
   renderFactura,
   renderFacturasTurno,
   renderPrecuenta,
@@ -119,3 +120,17 @@ const plu = renderVentasPLU({
 
 assert.match(plu, /VENTAS POR PRODUCTO/);
 assert.match(plu, /Combo doble/);
+
+const correccion = renderCorreccion({
+  numero_factura: 'PED-00005',
+  motivo: 'Propina asignada al metodo correcto',
+  cambios: [{
+    campo: 'pagos',
+    anterior: [{ metodo_pago: 'efectivo', monto: 30000, propina: 3000 }],
+    nuevo: [{ metodo_pago: 'nequi', monto: 30000, propina: 3000 }],
+  }],
+}, { now, columns: 32 });
+
+assert.match(correccion, /Pagos anteriores/);
+assert.match(correccion, /Servicio/);
+assert.match(correccion, /Nequi/);

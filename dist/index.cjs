@@ -689,6 +689,11 @@ function renderCorreccion(data, options = {}) {
     } else if (campo === "total") {
       lines.push(leftRight("  Total anterior:", money(cambio.anterior), ctx.width));
       lines.push(leftRight("  Total nuevo:", money(cambio.nuevo), ctx.width));
+    } else if (campo === "pagos") {
+      lines.push("  Pagos anteriores:");
+      renderCorrectionPayments(lines, arr(cambio.anterior), ctx);
+      lines.push("  Pagos nuevos:");
+      renderCorrectionPayments(lines, arr(cambio.nuevo), ctx);
     }
     lines.push("");
   }
@@ -907,6 +912,19 @@ function header(data, title, ctx) {
 }
 function renderReason2(lines, reason) {
   if (reason) lines.push(`      Motivo: ${text(reason)}`);
+}
+function renderCorrectionPayments(lines, pagos, ctx) {
+  if (!pagos.length) {
+    lines.push("    Sin pagos");
+    return;
+  }
+  for (const pago of pagos) {
+    const metodo = labelMetodo(pago.metodo_pago || pago.metodo);
+    const total = num(pago.monto) + num(pago.propina);
+    lines.push(leftRight(`    ${metodo}:`, money(total), ctx.width));
+    if (num(pago.monto) > 0) lines.push(leftRight("      Base:", money(pago.monto), ctx.width));
+    if (num(pago.propina) > 0) lines.push(leftRight("      Servicio:", money(pago.propina), ctx.width));
+  }
 }
 function pushDateTime(lines, ctx) {
   if (ctx.width >= 42) {
