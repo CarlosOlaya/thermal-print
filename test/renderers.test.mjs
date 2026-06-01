@@ -74,6 +74,17 @@ const precuenta = renderPrecuenta({
 assert.match(precuenta, /VERIFICACION DE PEDIDO/);
 assert.match(precuenta, /Mesa 4/);
 
+const precuentaDomicilio = renderPrecuenta({
+  mesa_nombre: 'Domicilio 1',
+  subtotal: 25000,
+  total: 25000,
+  recaudo_domicilio_monto: 4000,
+  cliente: { nombre: 'Alfredo', direccion: 'Calle 1' },
+}, { now, columns: 48 });
+
+assert.match(precuentaDomicilio, /\x1D\x56\x00/);
+assert.match(precuentaDomicilio, /DATOS PARA ENTREGA/);
+
 const cierre = renderCierreCaja({
   cajero: 'Niria',
   total_ventas: 144000,

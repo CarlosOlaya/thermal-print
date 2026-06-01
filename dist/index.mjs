@@ -366,6 +366,9 @@ function renderPrecuenta(data, options = {}) {
   if (esDelivery && isRecord(data.cliente)) {
     lines.push("");
     lines.push("");
+    lines.push("V\0");
+    lines.push("\x1B@");
+    lines.push("L\0\0");
     lines.push(renderDatosCliente(data, options));
   }
   return lines.join("\n");
