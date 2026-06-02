@@ -17,6 +17,7 @@ export interface ThermalComandaPayload {
   mesa?: number | string;
   mesa_nombre?: string;
   mesero?: string;
+  cliente_nombre?: string;
   area?: string;
   items?: ThermalComandaItem[];
   hora?: string;

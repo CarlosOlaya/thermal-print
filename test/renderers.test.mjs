@@ -16,6 +16,7 @@ const comanda = renderComanda({
   comanda: 12,
   mesa_nombre: 'Terraza 1',
   mesero: 'Niria',
+  cliente_nombre: 'Alfredo Payares',
   area: 'cocina',
   hora: '10:30 AM',
   items: [
@@ -25,8 +26,19 @@ const comanda = renderComanda({
 
 assert.match(comanda, /COMANDA #12/);
 assert.match(comanda, /TERRAZA 1/);
+assert.match(comanda, /Cliente: Alfredo Payares/);
 assert.match(comanda, /HAMBURGUESA DOBLE/);
 assert.match(comanda, /Sin cebolla/);
+
+const comandaSinCliente = renderComanda({
+  comanda: 13,
+  mesa_nombre: 'Llevar 1',
+  mesero: 'Niria',
+  area: 'cocina',
+  items: [{ nombre: 'Ajiaco', cantidad: 1 }],
+}, { now, columns: 32 });
+
+assert.doesNotMatch(comandaSinCliente, /Cliente:/);
 
 const factura = renderFactura({
   tenant_nombre: 'Crokanza',

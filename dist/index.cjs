@@ -170,6 +170,7 @@ function renderComanda(payload, options = {}) {
   lines.push(sep2);
   const mesaLabel = sanitizeText(String(payload.mesa_nombre || `Mesa: ${payload.mesa || ""}`).toUpperCase());
   lines.push(`${bold}${mesaLabel}${boldOff}   Mesero: ${sanitizeText(payload.mesero || "")}`);
+  if (payload.cliente_nombre) lines.push(`Cliente: ${sanitizeText(payload.cliente_nombre)}`);
   if (payload.comensales) lines.push(`Personas: ${payload.comensales}`);
   lines.push(`Fecha: ${formatDate(now, timezone)}   Hora: ${hora}`);
   lines.push(sep);
@@ -202,6 +203,7 @@ function renderComandaAnulacion(payload, options = {}) {
   lines.push(sep2);
   const mesaLabel = sanitizeText(String(payload.mesa_nombre || `Mesa: ${payload.mesa || ""}`).toUpperCase());
   lines.push(`${bold}${mesaLabel}${boldOff}   Mesero: ${sanitizeText(payload.mesero || "")}`);
+  if (payload.cliente_nombre) lines.push(`Cliente: ${sanitizeText(payload.cliente_nombre)}`);
   lines.push(`Fecha: ${formatDate(now, timezone)}   Hora: ${hora}`);
   lines.push(sep);
   if (payload.motivo) {
