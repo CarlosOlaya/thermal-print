@@ -7,6 +7,7 @@ import {
   renderFacturasTurno,
   renderPrecuenta,
   renderVentasPLU,
+  escBold,
   textToEscPosBytes,
 } from '../dist/index.mjs';
 
@@ -27,6 +28,7 @@ const comanda = renderComanda({
 assert.match(comanda, /COMANDA #12/);
 assert.match(comanda, /TERRAZA 1/);
 assert.match(comanda, /Cliente: Alfredo Payares/);
+assert.ok(comanda.includes(`${escBold(true)}Cliente: Alfredo Payares${escBold(false)}`));
 assert.match(comanda, /HAMBURGUESA DOBLE/);
 assert.match(comanda, /Sin cebolla/);
 
@@ -47,8 +49,9 @@ const factura = renderFactura({
   mesa_nombre: 'Mesa 4',
   mesero: 'Niria',
   items: [
-    { plato: 'Combo doble', cantidad: 1, precio_unitario: 25000 },
+    { plato: 'Combo doble', cantidad: 1, precio_unitario: 25000, comentario: 'Sin cebolla' },
     { plato: 'Gaseosa', cantidad: 1, precio_unitario: 5000, descuento_monto: 1000, motivo_descuento: 'Promo' },
+    { plato: 'Postre', cantidad: 1, precio_unitario: 6000, es_cortesia: true, comentario: 'Cumpleanos' },
   ],
   subtotal: 29000,
   descuento_monto: 2000,
@@ -64,6 +67,10 @@ const factura = renderFactura({
 assert.match(factura, /CROKANZA/);
 assert.match(factura, /DESC. MESA/);
 assert.match(factura, /Cliente frecuente/);
+assert.match(factura, /\*\* CORTESIA \*\*/);
+assert.match(factura, /Cumpleanos/);
+assert.match(factura, /Promo/);
+assert.doesNotMatch(factura, /Sin cebolla/);
 assert.match(factura, /DOMICILIO/);
 assert.match(factura, /Nequi/);
 assert.doesNotMatch(factura, /DATOS DE ENTREGA/);
@@ -77,7 +84,11 @@ const precuenta = renderPrecuenta({
   tenant_nombre: 'Crokanza',
   mesa_nombre: 'Mesa 4',
   mesero: 'Niria',
-  items: [{ nombre: 'Combo doble', cantidad: 1, precio_unitario: 25000 }],
+  items: [
+    { nombre: 'Combo doble', cantidad: 1, precio_unitario: 25000, comentario: 'Sin cebolla' },
+    { nombre: 'Gaseosa', cantidad: 1, precio_unitario: 5000, descuento_monto: 1000, motivo_descuento: 'Promo' },
+    { nombre: 'Postre', cantidad: 1, precio_unitario: 6000, es_cortesia: true, comentario: 'Cumpleanos' },
+  ],
   subtotal: 25000,
   total: 25000,
   propina_sugerida: 2500,
@@ -85,6 +96,10 @@ const precuenta = renderPrecuenta({
 
 assert.match(precuenta, /VERIFICACION DE PEDIDO/);
 assert.match(precuenta, /Mesa 4/);
+assert.match(precuenta, /\*\* CORTESIA \*\*/);
+assert.match(precuenta, /Cumpleanos/);
+assert.match(precuenta, /Promo/);
+assert.doesNotMatch(precuenta, /Sin cebolla/);
 
 const precuentaDomicilio = renderPrecuenta({
   mesa_nombre: 'Domicilio 1',

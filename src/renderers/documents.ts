@@ -31,7 +31,7 @@ export function renderPrecuenta(data: ThermalDocumentPayload, options: ThermalRe
   lines.push(escBold(true) + mesaNombre + escBold(false));
   lines.push(`MESERO: ${text(data.mesero)}`);
   lines.push(ctx.sep);
-  renderItemTable(lines, arr(data.items), ctx);
+  renderItemTable(lines, arr(data.items), ctx, 'nombre', false);
 
   lines.push(leftRight('SUBTOTAL:', money(subtotal + descuentoMesa), ctx.width));
   if (descuentoMesa > 0) {
@@ -438,16 +438,16 @@ export function renderNotaCredito(data: ThermalDocumentPayload, options: Thermal
   return lines.join('\n');
 }
 
-function renderItemTable(lines: string[], items: Row[], ctx: Ctx, nameKey = 'nombre'): void {
+function renderItemTable(lines: string[], items: Row[], ctx: Ctx, nameKey = 'nombre', renderOperationalComments = true): void {
   if (!items.length) return;
 
   lines.push(ctx.width >= 42 ? 'CANT  PRODUCTO                V.UNI    TOTAL' : 'CANT  PRODUCTO');
   lines.push(ctx.sep);
-  for (const item of items) renderItem(lines, item, ctx, nameKey);
+  for (const item of items) renderItem(lines, item, ctx, nameKey, renderOperationalComments);
   lines.push(ctx.sep);
 }
 
-function renderItem(lines: string[], item: Row, ctx: Ctx, nameKey: string): void {
+function renderItem(lines: string[], item: Row, ctx: Ctx, nameKey: string, renderOperationalComments: boolean): void {
   const qty = num(item.cantidad) || 1;
   const name = text(item[nameKey] || item.plato || item.producto || item.plato_nombre);
   const unit = num(item.precio_unitario);
@@ -466,7 +466,9 @@ function renderItem(lines: string[], item: Row, ctx: Ctx, nameKey: string): void
   if (item.es_cortesia) lines.push('      ** CORTESIA **');
   if (descAmount > 0) lines.push(`      ${descPct > 0 ? `Dcto -${descPct}% (-${money(descAmount)})` : `Dcto (-${money(descAmount)})`}`);
   renderReason(lines, item.motivo_descuento || (item.es_cortesia ? item.comentario : undefined));
-  if (item.comentario && !item.es_cortesia && !item.motivo_descuento) lines.push(`      > ${text(item.comentario)}`);
+  if (renderOperationalComments && item.comentario && !item.es_cortesia && !item.motivo_descuento) {
+    lines.push(`      > ${text(item.comentario)}`);
+  }
 }
 
 function renderPayments(lines: string[], pagos: Row[], metodoPago: unknown, total: unknown, ctx: Ctx): void {

@@ -90,7 +90,6 @@ function renderWideItem(lines: string[], item: ItemEvento): void {
   }
 
   lines.push(`${qty}  ${name} ${rightPadMoney(formatMoney(price), 8)} ${rightPadMoney(formatMoney(gross), 8)}`);
-  if (item.comentario && !item.motivo_descuento) lines.push(`      > ${sanitizeText(item.comentario)}`);
 }
 
 function renderNarrowItem(lines: string[], item: ItemEvento, width: number): void {
@@ -107,7 +106,6 @@ function renderNarrowItem(lines: string[], item: ItemEvento, width: number): voi
   if (item.es_cortesia) lines.push('      ** CORTESIA **');
   if (descAmount > 0) lines.push(`      Dcto (-$${formatMoney(descAmount)})`);
   renderReason(lines, item.motivo_descuento || (item.es_cortesia ? item.comentario : undefined));
-  if (item.comentario && !item.es_cortesia && !item.motivo_descuento) lines.push(`      > ${sanitizeText(item.comentario)}`);
 }
 
 function renderTotals(lines: string[], factura: FacturaCerradaPayload, width: number, sep2: string): void {

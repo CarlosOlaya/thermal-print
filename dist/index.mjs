@@ -123,7 +123,7 @@ function renderComanda(payload, options = {}) {
   lines.push(sep2);
   const mesaLabel = sanitizeText(String(payload.mesa_nombre || `Mesa: ${payload.mesa || ""}`).toUpperCase());
   lines.push(`${bold}${mesaLabel}${boldOff}   Mesero: ${sanitizeText(payload.mesero || "")}`);
-  if (payload.cliente_nombre) lines.push(`Cliente: ${sanitizeText(payload.cliente_nombre)}`);
+  if (payload.cliente_nombre) lines.push(`${bold}Cliente: ${sanitizeText(payload.cliente_nombre)}${boldOff}`);
   if (payload.comensales) lines.push(`Personas: ${payload.comensales}`);
   lines.push(`Fecha: ${formatDate(now, timezone)}   Hora: ${hora}`);
   lines.push(sep);
@@ -156,7 +156,7 @@ function renderComandaAnulacion(payload, options = {}) {
   lines.push(sep2);
   const mesaLabel = sanitizeText(String(payload.mesa_nombre || `Mesa: ${payload.mesa || ""}`).toUpperCase());
   lines.push(`${bold}${mesaLabel}${boldOff}   Mesero: ${sanitizeText(payload.mesero || "")}`);
-  if (payload.cliente_nombre) lines.push(`Cliente: ${sanitizeText(payload.cliente_nombre)}`);
+  if (payload.cliente_nombre) lines.push(`${bold}Cliente: ${sanitizeText(payload.cliente_nombre)}${boldOff}`);
   lines.push(`Fecha: ${formatDate(now, timezone)}   Hora: ${hora}`);
   lines.push(sep);
   if (payload.motivo) {
@@ -245,7 +245,6 @@ function renderWideItem(lines, item) {
     return;
   }
   lines.push(`${qty}  ${name} ${rightPadMoney(formatMoney(price), 8)} ${rightPadMoney(formatMoney(gross), 8)}`);
-  if (item.comentario && !item.motivo_descuento) lines.push(`      > ${sanitizeText(item.comentario)}`);
 }
 function renderNarrowItem(lines, item, width) {
   const qty = String(item.cantidad || 1).padStart(3, " ");
@@ -260,7 +259,6 @@ function renderNarrowItem(lines, item, width) {
   if (item.es_cortesia) lines.push("      ** CORTESIA **");
   if (descAmount > 0) lines.push(`      Dcto (-$${formatMoney(descAmount)})`);
   renderReason(lines, item.motivo_descuento || (item.es_cortesia ? item.comentario : void 0));
-  if (item.comentario && !item.es_cortesia && !item.motivo_descuento) lines.push(`      > ${sanitizeText(item.comentario)}`);
 }
 function renderTotals(lines, factura, width, sep2) {
   const subtotalVisible = Number(factura.subtotal) + Number(factura.descuento_monto || 0);
@@ -338,7 +336,7 @@ function renderPrecuenta(data, options = {}) {
   lines.push(escBold(true) + mesaNombre + escBold(false));
   lines.push(`MESERO: ${text(data.mesero)}`);
   lines.push(ctx.sep);
-  renderItemTable(lines, arr(data.items), ctx);
+  renderItemTable(lines, arr(data.items), ctx, "nombre", false);
   lines.push(leftRight("SUBTOTAL:", money(subtotal + descuentoMesa), ctx.width));
   if (descuentoMesa > 0) {
     lines.push(leftRight("DESC. MESA:", `-${money(descuentoMesa)}`, ctx.width));
@@ -702,14 +700,14 @@ function renderNotaCredito(data, options = {}) {
   lines.push(footer(ctx.width, options.footer));
   return lines.join("\n");
 }
-function renderItemTable(lines, items, ctx, nameKey = "nombre") {
+function renderItemTable(lines, items, ctx, nameKey = "nombre", renderOperationalComments = true) {
   if (!items.length) return;
   lines.push(ctx.width >= 42 ? "CANT  PRODUCTO                V.UNI    TOTAL" : "CANT  PRODUCTO");
   lines.push(ctx.sep);
-  for (const item of items) renderItem(lines, item, ctx, nameKey);
+  for (const item of items) renderItem(lines, item, ctx, nameKey, renderOperationalComments);
   lines.push(ctx.sep);
 }
-function renderItem(lines, item, ctx, nameKey) {
+function renderItem(lines, item, ctx, nameKey, renderOperationalComments) {
   const qty = num(item.cantidad) || 1;
   const name = text(item[nameKey] || item.plato || item.producto || item.plato_nombre);
   const unit = num(item.precio_unitario);
@@ -726,7 +724,9 @@ function renderItem(lines, item, ctx, nameKey) {
   if (item.es_cortesia) lines.push("      ** CORTESIA **");
   if (descAmount > 0) lines.push(`      ${descPct > 0 ? `Dcto -${descPct}% (-${money(descAmount)})` : `Dcto (-${money(descAmount)})`}`);
   renderReason2(lines, item.motivo_descuento || (item.es_cortesia ? item.comentario : void 0));
-  if (item.comentario && !item.es_cortesia && !item.motivo_descuento) lines.push(`      > ${text(item.comentario)}`);
+  if (renderOperationalComments && item.comentario && !item.es_cortesia && !item.motivo_descuento) {
+    lines.push(`      > ${text(item.comentario)}`);
+  }
 }
 function renderPayments2(lines, pagos, metodoPago, total, ctx) {
   if (pagos.length > 1) {
