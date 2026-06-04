@@ -7,7 +7,10 @@ import {
   renderFacturasTurno,
   renderPrecuenta,
   renderVentasPLU,
+  escBeep,
   escBold,
+  escCashDrawerPulse,
+  escCut,
   textToEscPosBytes,
 } from '../dist/index.mjs';
 
@@ -79,6 +82,12 @@ const bytes = textToEscPosBytes(factura);
 assert.ok(bytes instanceof Uint8Array);
 assert.equal(bytes[0], 0x1b);
 assert.equal(bytes[1], 0x40);
+assert.deepEqual(Array.from(textToEscPosBytes(escBold(true)).slice(2)), [0x1b, 0x45, 0x01]);
+assert.deepEqual(Array.from(textToEscPosBytes(escBold(false)).slice(2)), [0x1b, 0x45, 0x00]);
+assert.deepEqual(Array.from(textToEscPosBytes('X', { openCashDrawer: true }).slice(2, 7)), Array.from(escCashDrawerPulse()).map(char => char.charCodeAt(0)));
+assert.deepEqual(Array.from(textToEscPosBytes('X', { cut: true }).slice(-3)), Array.from(escCut()).map(char => char.charCodeAt(0)));
+assert.deepEqual(Array.from(textToEscPosBytes('X', { beepAfterPrint: true }).slice(-4)), Array.from(escBeep()).map(char => char.charCodeAt(0)));
+assert.notDeepEqual(Array.from(textToEscPosBytes('X').slice(2, 7)), Array.from(escCashDrawerPulse()).map(char => char.charCodeAt(0)));
 
 const precuenta = renderPrecuenta({
   tenant_nombre: 'Crokanza',

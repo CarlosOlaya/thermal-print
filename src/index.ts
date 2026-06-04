@@ -8,7 +8,17 @@ export type {
   ThermalRenderOptions,
 } from './types';
 
-export { ESC, escBold, escFontSize, textToEscPosBytes } from './escpos';
+export {
+  ESC,
+  escBeep,
+  escBold,
+  escCashDrawerPulse,
+  escCut,
+  escFontSize,
+  escLeftMargin,
+  textToEscPosBytes,
+  type EscPosByteOptions,
+} from './escpos';
 export { center, formatDate, formatMoney, formatTime, labelMetodo, leftRight, sanitizeText } from './utils';
 export { renderComanda, renderComandaAnulacion } from './renderers/comanda';
 export { renderFactura } from './renderers/factura';

@@ -78,6 +78,7 @@ function capitalize(value) {
 
 // src/escpos.ts
 var ESC = "\x1B";
+var GS = "";
 function escBold(active) {
   return ESC + (active ? "E" : "E\0");
 }
@@ -90,21 +91,69 @@ function escFontSize(size) {
   };
   return map[size];
 }
-function textToEscPosBytes(text2) {
+function escCut() {
+  return GS + "V\0";
+}
+function escLeftMargin(dots = 0) {
+  const safeDots = Math.max(0, Math.min(65535, Math.trunc(dots)));
+  return GS + "L" + String.fromCharCode(safeDots & 255, safeDots >> 8 & 255);
+}
+function escCashDrawerPulse() {
+  return ESC + "p\0\xFA";
+}
+function escBeep(count = 2, duration = 3) {
+  const safeCount = Math.max(1, Math.min(9, Math.trunc(count)));
+  const safeDuration = Math.max(1, Math.min(9, Math.trunc(duration)));
+  return ESC + "B" + String.fromCharCode(safeCount, safeDuration);
+}
+function textToEscPosBytes(text2, options = {}) {
   const bytes = [27, 64];
-  for (const char of text2 || "") {
-    const code = char.charCodeAt(0);
+  const document = [
+    options.openCashDrawer ? escCashDrawerPulse() : "",
+    text2 || "",
+    options.cut ? escCut() : "",
+    options.beepAfterPrint ? escBeep() : ""
+  ].join("");
+  for (let i = 0; i < document.length; i++) {
+    const code = document.charCodeAt(i);
     if (code === 27 || code === 29 || code === 10 || code === 13) {
       bytes.push(code);
+      if (code === 27 || code === 29) {
+        const command = document.charCodeAt(i + 1);
+        if (Number.isFinite(command)) {
+          bytes.push(command);
+          const paramCount = escPosParamCount(code, command);
+          for (let param = 0; param < paramCount && i + 2 + param < document.length; param++) {
+            bytes.push(document.charCodeAt(i + 2 + param) & 255);
+          }
+          i += 1 + paramCount;
+        }
+      }
       continue;
     }
-    const safe = sanitizeText(char);
+    const safe = sanitizeText(document[i]);
     for (const safeChar of safe) {
       const safeCode = safeChar.charCodeAt(0);
       if (safeCode >= 32 && safeCode <= 126) bytes.push(safeCode);
     }
   }
   return new Uint8Array(bytes);
+}
+function escPosParamCount(prefix, command) {
+  if (prefix === 27) {
+    if (command === 66) return 2;
+    if (command === 69) return 1;
+    if (command === 112) return 3;
+    if (command === 97) return 1;
+    return 0;
+  }
+  if (prefix === 29) {
+    if (command === 33) return 1;
+    if (command === 76) return 2;
+    if (command === 86) return 1;
+    return 0;
+  }
+  return 0;
 }
 
 // src/renderers/comanda.ts
@@ -925,8 +974,12 @@ function isRecord(value) {
 export {
   ESC,
   center,
+  escBeep,
   escBold,
+  escCashDrawerPulse,
+  escCut,
   escFontSize,
+  escLeftMargin,
   formatDate,
   formatMoney,
   formatTime,

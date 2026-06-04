@@ -1,4 +1,13 @@
 export declare const ESC = "\u001B";
+export interface EscPosByteOptions {
+    cut?: boolean;
+    openCashDrawer?: boolean;
+    beepAfterPrint?: boolean;
+}
 export declare function escBold(active: boolean): string;
 export declare function escFontSize(size: 1 | 2 | 3 | 4): string;
-export declare function textToEscPosBytes(text: string): Uint8Array;
+export declare function escCut(): string;
+export declare function escLeftMargin(dots?: number): string;
+export declare function escCashDrawerPulse(): string;
+export declare function escBeep(count?: number, duration?: number): string;
+export declare function textToEscPosBytes(text: string, options?: EscPosByteOptions): Uint8Array;
