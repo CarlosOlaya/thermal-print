@@ -173,6 +173,7 @@ function renderComanda(payload, options = {}) {
   const mesaLabel = sanitizeText(String(payload.mesa_nombre || `Mesa: ${payload.mesa || ""}`).toUpperCase());
   lines.push(`${bold}${mesaLabel}${boldOff}   Mesero: ${sanitizeText(payload.mesero || "")}`);
   if (payload.cliente_nombre) lines.push(`${bold}Cliente: ${sanitizeText(payload.cliente_nombre)}${boldOff}`);
+  if (payload.localizador) lines.push(`${bold}Localizador: ${sanitizeText(payload.localizador)}${boldOff}`);
   if (payload.comensales) lines.push(`Personas: ${payload.comensales}`);
   lines.push(`Fecha: ${formatDate(now, timezone)}   Hora: ${hora}`);
   lines.push(sep);
@@ -206,6 +207,7 @@ function renderComandaAnulacion(payload, options = {}) {
   const mesaLabel = sanitizeText(String(payload.mesa_nombre || `Mesa: ${payload.mesa || ""}`).toUpperCase());
   lines.push(`${bold}${mesaLabel}${boldOff}   Mesero: ${sanitizeText(payload.mesero || "")}`);
   if (payload.cliente_nombre) lines.push(`${bold}Cliente: ${sanitizeText(payload.cliente_nombre)}${boldOff}`);
+  if (payload.localizador) lines.push(`${bold}Localizador: ${sanitizeText(payload.localizador)}${boldOff}`);
   lines.push(`Fecha: ${formatDate(now, timezone)}   Hora: ${hora}`);
   lines.push(sep);
   if (payload.motivo) {

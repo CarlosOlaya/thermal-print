@@ -21,6 +21,7 @@ const comanda = renderComanda({
   mesa_nombre: 'Terraza 1',
   mesero: 'Niria',
   cliente_nombre: 'Alfredo Payares',
+  localizador: 'A12',
   area: 'cocina',
   hora: '10:30 AM',
   items: [
@@ -32,6 +33,8 @@ assert.match(comanda, /COMANDA #12/);
 assert.match(comanda, /TERRAZA 1/);
 assert.match(comanda, /Cliente: Alfredo Payares/);
 assert.ok(comanda.includes(`${escBold(true)}Cliente: Alfredo Payares${escBold(false)}`));
+assert.match(comanda, /Localizador: A12/);
+assert.ok(comanda.includes(`${escBold(true)}Localizador: A12${escBold(false)}`));
 assert.match(comanda, /HAMBURGUESA DOBLE/);
 assert.match(comanda, /Sin cebolla/);
 

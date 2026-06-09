@@ -16,6 +16,7 @@ export interface ThermalComandaPayload {
     mesa_nombre?: string;
     mesero?: string;
     cliente_nombre?: string;
+    localizador?: string;
     area?: string;
     items?: ThermalComandaItem[];
     hora?: string;
@@ -49,6 +50,7 @@ export interface FacturaCerradaPayload {
     nit?: string;
     mesa_numero?: number;
     mesa_nombre?: string;
+    localizador?: string;
     mesero?: string;
     cliente?: string;
     items?: ItemEvento[];
