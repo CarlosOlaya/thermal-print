@@ -20,8 +20,8 @@ export function renderPrecuenta(data: ThermalDocumentPayload, options: ThermalRe
   const lines = header(data, 'VERIFICACION DE PEDIDO', ctx);
   const subtotal = num(data.subtotal);
   const descuentoMesa = num(data.descuento_mesa ?? data.descuento_monto);
-  const propinaPct = num(data.porcentaje_propina_sugerida) || 10;
-  const propina = num(data.propina_sugerida) || Math.round(subtotal * propinaPct / 100);
+  const propinaPct = numOrDefault(data.porcentaje_propina_sugerida, 10);
+  const propina = numOrDefault(data.propina_sugerida, Math.round(subtotal * propinaPct / 100));
   const total = num(data.total);
   const domicilio = num(data.recaudo_domicilio_monto);
   const mesaNombre = text(data.mesa_nombre || `MESA: ${data.mesa_numero || ''}`);
@@ -685,6 +685,12 @@ function text(value: unknown): string {
 function num(value: unknown): number {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function numOrDefault(value: unknown, fallback: number): number {
+  if (value === undefined || value === null || value === '') return fallback;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
 }
 
 function arr(value: unknown): Row[] {

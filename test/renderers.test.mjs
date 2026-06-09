@@ -108,10 +108,30 @@ const precuenta = renderPrecuenta({
 
 assert.match(precuenta, /VERIFICACION DE PEDIDO/);
 assert.match(precuenta, /Mesa 4/);
+assert.match(precuenta, /SERVICIO SUGERIDO \(10%\):/);
 assert.match(precuenta, /\*\* CORTESIA \*\*/);
 assert.match(precuenta, /Cumpleanos/);
 assert.match(precuenta, /Promo/);
 assert.doesNotMatch(precuenta, /Sin cebolla/);
+
+const precuentaSinServicioSugerido = renderPrecuenta({
+  tenant_nombre: 'Crokanza',
+  mesa_nombre: 'Mesa 7',
+  mesero: 'Niria',
+  items: [
+    { nombre: 'Jugo natural', cantidad: 1, precio_unitario: 7600 },
+    { nombre: 'Hatsu soda', cantidad: 1, precio_unitario: 6000 },
+    { nombre: 'Punta de anca', cantidad: 1, precio_unitario: 46900 },
+  ],
+  subtotal: 60400,
+  total: 60400,
+  propina_sugerida: 0,
+  porcentaje_propina_sugerida: 0,
+}, { now, columns: 32 });
+
+assert.doesNotMatch(precuentaSinServicioSugerido, /SERVICIO SUGERIDO/);
+assert.doesNotMatch(precuentaSinServicioSugerido, /TOTAL \+ SERVICIO/);
+assert.match(precuentaSinServicioSugerido, /TOTAL A PAGAR:\s+\$60\.400/);
 
 const precuentaDomicilio = renderPrecuenta({
   mesa_nombre: 'Domicilio 1',
