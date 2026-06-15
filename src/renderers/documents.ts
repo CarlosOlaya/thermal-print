@@ -112,6 +112,7 @@ export function renderCierreCaja(data: ThermalDocumentPayload, options: ThermalR
   const metodos = arr(data.metodos_desglose);
   const tieneDesglose = metodos.length > 0;
   const gastos = isRecord(data.gastos) ? data.gastos : undefined;
+  const ingresosCaja = isRecord(data.ingresos_caja) ? data.ingresos_caja : undefined;
   const domicilios = isRecord(data.domicilios) ? data.domicilios : undefined;
 
   lines.push(leftRight('Cajero:', text(data.cajero), ctx.width));
@@ -167,7 +168,8 @@ export function renderCierreCaja(data: ThermalDocumentPayload, options: ThermalR
 
   renderDiscountSummary(lines, data, ctx);
   renderExpenseSummary(lines, gastos, ctx);
-  renderCashSummary(lines, data, metodos, gastos, domicilios, ctx);
+  renderCashIncomeSummary(lines, ingresosCaja, ctx);
+  renderCashSummary(lines, data, metodos, gastos, ingresosCaja, domicilios, ctx);
   renderOrderSummary(lines, data, ctx);
   renderDeliverySummary(lines, domicilios, ctx);
 
@@ -556,7 +558,19 @@ function renderExpenseSummary(lines: string[], gastos: Row | undefined, ctx: Ctx
   lines.push('');
 }
 
-function renderCashSummary(lines: string[], data: ThermalDocumentPayload, metodos: Row[], gastos: Row | undefined, domicilios: Row | undefined, ctx: Ctx): void {
+function renderCashIncomeSummary(lines: string[], ingresosCaja: Row | undefined, ctx: Ctx): void {
+  if (!ingresosCaja || num(ingresosCaja.total_efectivo) <= 0) return;
+  lines.push(escBold(true) + 'INGRESOS DE CAJA' + escBold(false));
+  lines.push(ctx.sep);
+  for (const ingreso of arr(ingresosCaja.items)) {
+    lines.push(leftRight(`  ${text(ingreso.concepto || 'Ingreso').substring(0, 28)}:`, money(ingreso.monto), ctx.width));
+  }
+  lines.push(ctx.sep);
+  lines.push(escBold(true) + leftRight('TOTAL INGRESOS:', money(ingresosCaja.total_efectivo), ctx.width) + escBold(false));
+  lines.push('');
+}
+
+function renderCashSummary(lines: string[], data: ThermalDocumentPayload, metodos: Row[], gastos: Row | undefined, ingresosCaja: Row | undefined, domicilios: Row | undefined, ctx: Ctx): void {
   const efectivo = metodos.length ? metodos.find(m => text(m.clave) === 'efectivo') : undefined;
   const ventaEf = efectivo ? num(efectivo.venta) : num(data.total_efectivo);
   const servicioEf = efectivo ? num(efectivo.servicio) : num(data.propina_efectivo);
@@ -568,6 +582,7 @@ function renderCashSummary(lines: string[], data: ThermalDocumentPayload, metodo
   lines.push(leftRight('Inicial:', money(data.efectivo_inicial), ctx.width));
   lines.push(leftRight('+ Ventas:', money(ventaEf), ctx.width));
   lines.push(leftRight('+ Propinas:', money(servicioEf), ctx.width));
+  if (num(ingresosCaja?.total_efectivo) > 0) lines.push(leftRight('+ Ingresos caja:', money(ingresosCaja?.total_efectivo), ctx.width));
   if (num(gastosEf?.total) > 0) lines.push(leftRight('- Egresos:', `-${money(gastosEf?.total)}`, ctx.width));
   if (num(domicilios?.recaudado_efectivo) > 0) lines.push(leftRight('+ Domicilio:', money(domicilios?.recaudado_efectivo), ctx.width));
   if (num(domicilios?.liquidado_efectivo) > 0) lines.push(leftRight('- Liq. domicilio:', `-${money(domicilios?.liquidado_efectivo)}`, ctx.width));
