@@ -219,7 +219,9 @@ function renderComanda(payload, options = {}) {
   const boldOff = escBold(false);
   const hora = payload.hora ? sanitizeText(payload.hora) : formatTime(now, timezone);
   const lines = ["", "", ""];
-  lines.push(center(`COMANDA #${payload.comanda || ""} | ${sanitizeText(payload.area || "").toUpperCase()}`, width));
+  const secciones = Array.isArray(payload.secciones) && payload.secciones.length > 0 ? payload.secciones : null;
+  const titulo = secciones ? `COMANDA #${payload.comanda || ""}` : `COMANDA #${payload.comanda || ""} | ${sanitizeText(payload.area || "").toUpperCase()}`;
+  lines.push(center(titulo, width));
   lines.push(sep2);
   const mesaLabel = sanitizeText(String(payload.mesa_nombre || `Mesa: ${payload.mesa || ""}`).toUpperCase());
   lines.push(`${bold}${mesaLabel}${boldOff}   Mesero: ${sanitizeText(payload.mesero || "")}`);
@@ -227,15 +229,27 @@ function renderComanda(payload, options = {}) {
   if (payload.localizador) lines.push(`${bold}Localizador: ${sanitizeText(payload.localizador)}${boldOff}`);
   if (payload.comensales) lines.push(`Personas: ${payload.comensales}`);
   lines.push(`Fecha: ${formatDate(now, timezone)}   Hora: ${hora}`);
-  lines.push(sep);
-  lines.push("CANT  PRODUCTO");
-  lines.push(sep);
-  for (const item of payload.items || []) {
-    const name = sanitizeText((item.nombre || item.producto || "").toUpperCase()).substring(0, Math.max(10, width - 6));
-    const qty = String(item.cantidad || 1).padStart(3, " ");
-    lines.push(bold + `${qty}  ${name}` + boldOff);
-    if (item.comentario) lines.push(`      > ${sanitizeText(item.comentario)}`);
-    lines.push("");
+  const pushItems = (items) => {
+    for (const item of items || []) {
+      const name = sanitizeText((item.nombre || item.producto || "").toUpperCase()).substring(0, Math.max(10, width - 6));
+      const qty = String(item.cantidad || 1).padStart(3, " ");
+      lines.push(bold + `${qty}  ${name}` + boldOff);
+      if (item.comentario) lines.push(`      > ${sanitizeText(item.comentario)}`);
+      lines.push("");
+    }
+  };
+  if (secciones) {
+    for (const seccion of secciones) {
+      lines.push(sep);
+      lines.push(bold + center(`* ${sanitizeText(seccion.area || "").toUpperCase()} *`, width) + boldOff);
+      lines.push(sep);
+      pushItems(seccion.items);
+    }
+  } else {
+    lines.push(sep);
+    lines.push("CANT  PRODUCTO");
+    lines.push(sep);
+    pushItems(payload.items);
   }
   lines.push(sep2, "", "", "", "");
   return lines.join("\n");

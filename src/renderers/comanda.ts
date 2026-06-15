@@ -1,5 +1,5 @@
 import { escBold } from '../escpos';
-import type { ThermalComandaPayload, ThermalRenderOptions } from '../types';
+import type { ThermalComandaItem, ThermalComandaPayload, ThermalRenderOptions } from '../types';
 import { center, clampColumns, formatDate, formatTime, sanitizeText } from '../utils';
 
 export function renderComanda(payload: ThermalComandaPayload, options: ThermalRenderOptions = {}): string {
@@ -15,7 +15,16 @@ export function renderComanda(payload: ThermalComandaPayload, options: ThermalRe
   const hora = payload.hora ? sanitizeText(payload.hora) : formatTime(now, timezone);
   const lines: string[] = ['', '', ''];
 
-  lines.push(center(`COMANDA #${payload.comanda || ''} | ${sanitizeText(payload.area || '').toUpperCase()}`, width));
+  // Comanda unificada: varios áreas en un solo ticket (secciones). Si no llega,
+  // se usa el modo por área (un único `items` + área en el título).
+  const secciones = Array.isArray(payload.secciones) && payload.secciones.length > 0
+    ? payload.secciones
+    : null;
+
+  const titulo = secciones
+    ? `COMANDA #${payload.comanda || ''}`
+    : `COMANDA #${payload.comanda || ''} | ${sanitizeText(payload.area || '').toUpperCase()}`;
+  lines.push(center(titulo, width));
   lines.push(sep2);
 
   const mesaLabel = sanitizeText(String(payload.mesa_nombre || `Mesa: ${payload.mesa || ''}`).toUpperCase());
@@ -24,16 +33,29 @@ export function renderComanda(payload: ThermalComandaPayload, options: ThermalRe
   if (payload.localizador) lines.push(`${bold}Localizador: ${sanitizeText(payload.localizador)}${boldOff}`);
   if (payload.comensales) lines.push(`Personas: ${payload.comensales}`);
   lines.push(`Fecha: ${formatDate(now, timezone)}   Hora: ${hora}`);
-  lines.push(sep);
-  lines.push('CANT  PRODUCTO');
-  lines.push(sep);
 
-  for (const item of payload.items || []) {
-    const name = sanitizeText((item.nombre || item.producto || '').toUpperCase()).substring(0, Math.max(10, width - 6));
-    const qty = String(item.cantidad || 1).padStart(3, ' ');
-    lines.push(bold + `${qty}  ${name}` + boldOff);
-    if (item.comentario) lines.push(`      > ${sanitizeText(item.comentario)}`);
-    lines.push('');
+  const pushItems = (items: ThermalComandaItem[] | undefined): void => {
+    for (const item of items || []) {
+      const name = sanitizeText((item.nombre || item.producto || '').toUpperCase()).substring(0, Math.max(10, width - 6));
+      const qty = String(item.cantidad || 1).padStart(3, ' ');
+      lines.push(bold + `${qty}  ${name}` + boldOff);
+      if (item.comentario) lines.push(`      > ${sanitizeText(item.comentario)}`);
+      lines.push('');
+    }
+  };
+
+  if (secciones) {
+    for (const seccion of secciones) {
+      lines.push(sep);
+      lines.push(bold + center(`* ${sanitizeText(seccion.area || '').toUpperCase()} *`, width) + boldOff);
+      lines.push(sep);
+      pushItems(seccion.items);
+    }
+  } else {
+    lines.push(sep);
+    lines.push('CANT  PRODUCTO');
+    lines.push(sep);
+    pushItems(payload.items);
   }
 
   lines.push(sep2, '', '', '', '');

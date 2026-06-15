@@ -48,6 +48,33 @@ const comandaSinCliente = renderComanda({
 
 assert.doesNotMatch(comandaSinCliente, /Cliente:/);
 
+// Comanda unificada: secciones por área en un solo ticket
+const comandaUnificada = renderComanda({
+  comanda: 14,
+  mesa_nombre: 'Mesa 3',
+  mesero: 'Niria',
+  secciones: [
+    { area: 'cocina', items: [{ nombre: 'Burger', cantidad: 2 }] },
+    { area: 'bar', items: [{ nombre: 'Cerveza', cantidad: 3, comentario: 'Bien fria' }] },
+  ],
+}, { now, columns: 48 });
+
+assert.match(comandaUnificada, /COMANDA #14/);
+assert.doesNotMatch(comandaUnificada, /COMANDA #14 \|/); // sin área en el título
+assert.match(comandaUnificada, /\* COCINA \*/);
+assert.match(comandaUnificada, /\* BAR \*/);
+assert.match(comandaUnificada, /BURGER/);
+assert.match(comandaUnificada, /CERVEZA/);
+assert.match(comandaUnificada, /Bien fria/);
+
+// Sin secciones → fallback a items planos (comportamiento por área)
+const comandaFlat = renderComanda({
+  comanda: 15, mesa_nombre: 'Mesa 9', mesero: 'Niria', area: 'cocina',
+  items: [{ nombre: 'Ajiaco', cantidad: 1 }],
+}, { now, columns: 48 });
+assert.match(comandaFlat, /COMANDA #15 \| COCINA/);
+assert.match(comandaFlat, /CANT  PRODUCTO/);
+
 const factura = renderFactura({
   tenant_nombre: 'Crokanza',
   nit: '64676604-3',

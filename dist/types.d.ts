@@ -10,6 +10,10 @@ export interface ThermalComandaItem {
     cantidad?: number;
     comentario?: string;
 }
+export interface ThermalComandaSeccion {
+    area?: string;
+    items?: ThermalComandaItem[];
+}
 export interface ThermalComandaPayload {
     comanda?: number | string;
     mesa?: number | string;
@@ -19,6 +23,12 @@ export interface ThermalComandaPayload {
     localizador?: string;
     area?: string;
     items?: ThermalComandaItem[];
+    /**
+     * Comanda unificada: ítems agrupados por área en un solo ticket. Cuando viene
+     * presente, el renderer imprime un encabezado por sección y omite el área única
+     * del título. Si está ausente, se usa `items` (comportamiento por área).
+     */
+    secciones?: ThermalComandaSeccion[];
     hora?: string;
     comensales?: number;
     tipo_comanda?: string;
