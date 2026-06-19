@@ -6,6 +6,7 @@ import {
   renderFactura,
   renderFacturasTurno,
   renderPrecuenta,
+  renderTomaInventario,
   renderVentasPLU,
   escBeep,
   escBold,
@@ -231,3 +232,29 @@ const correccion = renderCorreccion({
 assert.match(correccion, /Pagos anteriores/);
 assert.match(correccion, /Servicio/);
 assert.match(correccion, /Nequi/);
+
+const tomaInventario = renderTomaInventario({
+  tenant_nombre: 'Crokanza',
+  bodega: 'Principal',
+  generado_por: 'Niria',
+  items: [
+    { nombre: 'Papas francesas', stock_actual: 12.5, unidad: 'kg' },
+    { producto: 'Gaseosa personal', existencia: 8, unidad_medida: 'u' },
+  ],
+}, { now, columns: 48 });
+
+assert.match(tomaInventario, /TOMA DE INVENTARIO/);
+assert.match(tomaInventario, /Bodega:\s+Principal/);
+assert.match(tomaInventario, /Papas francesas/);
+assert.match(tomaInventario, /12.5 kg/);
+assert.match(tomaInventario, /Total productos:\s+2/);
+
+const tomaInventarioCiega = renderTomaInventario({
+  tenant_nombre: 'Crokanza',
+  modo_ciego: true,
+  items: [{ nombre: 'Tomate', stock_actual: 3, unidad: 'kg' }],
+}, { now, columns: 32 });
+
+assert.match(tomaInventarioCiega, /TOMA DE INVENTARIO/);
+assert.match(tomaInventarioCiega, /Sist: ______/);
+assert.doesNotMatch(tomaInventarioCiega, /3 kg/);

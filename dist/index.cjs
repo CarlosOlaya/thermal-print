@@ -43,6 +43,7 @@ __export(index_exports, {
   renderNotaCredito: () => renderNotaCredito,
   renderPrecuenta: () => renderPrecuenta,
   renderReporteVentas: () => renderReporteVentas,
+  renderTomaInventario: () => renderTomaInventario,
   renderVentasPLU: () => renderVentasPLU,
   sanitizeText: () => sanitizeText,
   textToEscPosBytes: () => textToEscPosBytes
@@ -818,6 +819,43 @@ function renderNotaCredito(data, options = {}) {
   lines.push(footer(ctx.width, options.footer));
   return lines.join("\n");
 }
+function renderTomaInventario(data, options = {}) {
+  const ctx = context(options);
+  const lines = header(data, "TOMA DE INVENTARIO", ctx);
+  const items = arr(data.items);
+  const ciego = data.modo_ciego === true;
+  const blank = "_".repeat(ctx.width >= 42 ? 8 : 6);
+  if (data.bodega) lines.push(leftRight("Bodega:", text(data.bodega), ctx.width));
+  if (data.generado_por) lines.push(leftRight("Genera:", text(data.generado_por), ctx.width));
+  pushDateTime(lines, ctx);
+  lines.push(ctx.sep);
+  lines.push(escBold(true) + (ctx.width >= 42 ? "PRODUCTO              SISTEMA   FISICO" : "PRODUCTO            SIST  FISICO") + escBold(false));
+  lines.push(ctx.sep);
+  if (!items.length) lines.push(center("Sin productos para tomar.", ctx.width));
+  for (const item of items) {
+    const nombre = text(item.nombre || item.producto);
+    const unidad = text(item.unidad || item.unidad_medida || "u");
+    const sist = ciego ? blank : `${formatQty(item.stock_actual ?? item.stock ?? item.existencia)} ${unidad}`.trim();
+    if (ctx.width >= 42) {
+      lines.push(`${nombre.substring(0, 20).padEnd(20, " ")} ${sist.padStart(8, " ")}  ${blank}`);
+    } else {
+      lines.push(nombre.substring(0, ctx.width));
+      lines.push(leftRight(`  Sist: ${sist}`, blank, ctx.width));
+    }
+  }
+  lines.push(ctx.sep2);
+  lines.push(leftRight("Total productos:", items.length, ctx.width));
+  lines.push("");
+  lines.push(center("Cuente el fisico, anote en FISICO", ctx.width));
+  lines.push(center("y registre la toma en el sistema.", ctx.width));
+  lines.push("");
+  lines.push(leftRight("Contado por:", "________________", ctx.width));
+  lines.push(leftRight("Firma:", "________________", ctx.width));
+  lines.push(ctx.sep2);
+  lines.push(center("** SOLO PARA CONTROL INTERNO **", ctx.width));
+  lines.push(footer(ctx.width, options.footer));
+  return lines.join("\n");
+}
 function renderItemTable(lines, items, ctx, nameKey = "nombre", renderOperationalComments = true) {
   if (!items.length) return;
   lines.push(ctx.width >= 42 ? "CANT  PRODUCTO                V.UNI    TOTAL" : "CANT  PRODUCTO");
@@ -1046,6 +1084,11 @@ function num(value) {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : 0;
 }
+function formatQty(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "0";
+  return Number.isInteger(numeric) ? String(numeric) : String(Math.round(numeric * 100) / 100);
+}
 function numOrDefault(value, fallback) {
   if (value === void 0 || value === null || value === "") return fallback;
   const numeric = Number(value);
@@ -1083,6 +1126,7 @@ function isRecord(value) {
   renderNotaCredito,
   renderPrecuenta,
   renderReporteVentas,
+  renderTomaInventario,
   renderVentasPLU,
   sanitizeText,
   textToEscPosBytes

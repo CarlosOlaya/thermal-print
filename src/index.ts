@@ -5,7 +5,9 @@ export type {
   ThermalComandaItem,
   ThermalComandaPayload,
   ThermalDocumentPayload,
+  ThermalInventarioItem,
   ThermalRenderOptions,
+  ThermalTomaInventarioPayload,
 } from './types';
 
 export {
@@ -31,5 +33,6 @@ export {
   renderNotaCredito,
   renderPrecuenta,
   renderReporteVentas,
+  renderTomaInventario,
   renderVentasPLU,
 } from './renderers/documents';

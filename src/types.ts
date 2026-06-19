@@ -96,3 +96,29 @@ export interface FacturaCerradaPayload {
 }
 
 export type ThermalDocumentPayload = Record<string, unknown>;
+
+export interface ThermalInventarioItem {
+  nombre?: string;
+  producto?: string;
+  unidad?: string;
+  unidad_medida?: string;
+  stock_actual?: number;
+  stock?: number;
+  existencia?: number;
+}
+
+/**
+ * Toma de inventario: tirilla para imprimir el stock actual y que el personal
+ * anote el conteo físico, antes de registrar la toma en el sistema.
+ */
+export interface ThermalTomaInventarioPayload extends Record<string, unknown> {
+  tenant_nombre?: string;
+  nit?: string;
+  telefono?: string;
+  direccion?: string;
+  bodega?: string;
+  generado_por?: string;
+  /** Conteo ciego: oculta el stock del sistema para no sesgar el conteo. */
+  modo_ciego?: boolean;
+  items?: ThermalInventarioItem[];
+}
