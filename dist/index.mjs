@@ -264,6 +264,7 @@ function renderFactura(factura, options = {}) {
   }
   lines.push(sanitizeText(factura.mesa_nombre || `Mesa: ${factura.mesa_numero || ""}`));
   lines.push(`Mesero: ${sanitizeText(factura.mesero || "")}`);
+  renderCliente(lines, factura);
   lines.push(sep);
   renderItems(lines, factura.items || [], width, sep);
   renderTotals(lines, factura, width, sep2);
@@ -273,6 +274,14 @@ function renderFactura(factura, options = {}) {
   lines.push(center("Gracias por su visita!", width));
   lines.push(footer(width, options.footer));
   return lines.join("\n");
+}
+function renderCliente(lines, factura) {
+  const nombre = factura.cliente;
+  if (nombre && nombre !== "Consumidor final") lines.push(`Cliente: ${sanitizeText(nombre)}`);
+  if (factura.cliente_telefono) lines.push(`Tel: ${sanitizeText(factura.cliente_telefono)}`);
+  if (factura.cliente_direccion) lines.push(`Dir: ${sanitizeText(factura.cliente_direccion)}`);
+  if (factura.cliente_barrio) lines.push(`Barrio: ${sanitizeText(factura.cliente_barrio)}`);
+  if (factura.localizador) lines.push(`Localizador: ${sanitizeText(factura.localizador)}`);
 }
 function renderItems(lines, items, width, sep) {
   if (!items.length) return;

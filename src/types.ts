@@ -69,6 +69,9 @@ export interface FacturaCerradaPayload {
   localizador?: string;
   mesero?: string;
   cliente?: string;
+  cliente_telefono?: string;
+  cliente_direccion?: string;
+  cliente_barrio?: string;
   items?: ItemEvento[];
   subtotal?: number;
   bruto?: number;
