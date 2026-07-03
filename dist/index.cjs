@@ -86,6 +86,13 @@ function leftRight(left, right, width = 48) {
   const gap = width - safeLeft.length - safeRight.length;
   return safeLeft + " ".repeat(Math.max(gap, 1)) + safeRight;
 }
+function itemRow(qty, name, right, width = 48) {
+  const qtyStr = String(Number(qty) || 1).padStart(2, " ");
+  const safeRight = sanitizeText(right);
+  const nameMax = Math.max(6, width - qtyStr.length - safeRight.length - 2);
+  const nameStr = sanitizeText(name).substring(0, nameMax);
+  return leftRight(`${qtyStr} ${nameStr}`, safeRight, width);
+}
 function rightPadMoney(value, width) {
   const safe = sanitizeText(value);
   return safe.length >= width ? safe : " ".repeat(width - safe.length) + safe;
@@ -338,7 +345,7 @@ function renderCliente(lines, factura) {
 function renderItems(lines, items, width, sep) {
   if (!items.length) return;
   if (width >= 42) lines.push("CANT  PRODUCTO                V.UNI    TOTAL");
-  else lines.push("CANT  PRODUCTO");
+  else lines.push(leftRight("CANT PRODUCTO", "TOTAL", width));
   lines.push(sep);
   for (const item of items) {
     if (width >= 42) {
@@ -373,17 +380,14 @@ function renderWideItem(lines, item) {
   lines.push(`${qty}  ${name} ${rightPadMoney(formatMoney(price), 8)} ${rightPadMoney(formatMoney(gross), 8)}`);
 }
 function renderNarrowItem(lines, item, width) {
-  const qty = String(item.cantidad || 1).padStart(3, " ");
-  const name = sanitizeText(item.nombre || item.plato || "").substring(0, Math.max(10, width - 6));
-  const price = Number(item.precio_unitario) || 0;
   const qtyNum = Number(item.cantidad) || 1;
+  const price = Number(item.precio_unitario) || 0;
   const descAmount = Number(item.descuento_monto) || 0;
   const gross = price * qtyNum;
   const net = item.es_cortesia ? 0 : gross - descAmount;
-  lines.push(`${qty}  ${name}`);
-  lines.push(leftRight("      Total:", `$${formatMoney(net)}`, width));
-  if (item.es_cortesia) lines.push("      ** CORTESIA **");
-  if (descAmount > 0) lines.push(`      Dcto (-$${formatMoney(descAmount)})`);
+  lines.push(itemRow(qtyNum, item.nombre || item.plato || "", `$${formatMoney(net)}`, width));
+  if (item.es_cortesia) lines.push("   ** CORTESIA **");
+  if (descAmount > 0) lines.push(`   Dcto (-$${formatMoney(descAmount)})`);
   renderReason(lines, item.motivo_descuento || (item.es_cortesia ? item.comentario : void 0));
 }
 function renderTotals(lines, factura, width, sep2) {
@@ -834,11 +838,13 @@ function renderTomaInventario(data, options = {}) {
   const items = arr(data.items);
   const ciego = data.modo_ciego === true;
   const blank = "_".repeat(ctx.width >= 42 ? 8 : 6);
+  const sistW = 8;
+  const nameW = Math.max(8, ctx.width - blank.length - sistW - 2);
   if (data.bodega) lines.push(leftRight("Bodega:", text(data.bodega), ctx.width));
   if (data.generado_por) lines.push(leftRight("Genera:", text(data.generado_por), ctx.width));
   pushDateTime(lines, ctx);
   lines.push(ctx.sep);
-  lines.push(escBold(true) + (ctx.width >= 42 ? "PRODUCTO              SISTEMA   FISICO" : "PRODUCTO            SIST  FISICO") + escBold(false));
+  lines.push(escBold(true) + (ctx.width >= 42 ? "PRODUCTO              SISTEMA   FISICO" : `${"PRODUCTO".padEnd(nameW)} ${"SIST".padStart(sistW)} FISICO`) + escBold(false));
   lines.push(ctx.sep);
   if (!items.length) lines.push(center("Sin productos para tomar.", ctx.width));
   for (const item of items) {
@@ -848,8 +854,7 @@ function renderTomaInventario(data, options = {}) {
     if (ctx.width >= 42) {
       lines.push(`${nombre.substring(0, 20).padEnd(20, " ")} ${sist.padStart(8, " ")}  ${blank}`);
     } else {
-      lines.push(nombre.substring(0, ctx.width));
-      lines.push(leftRight(`  Sist: ${sist}`, blank, ctx.width));
+      lines.push(`${nombre.substring(0, nameW).padEnd(nameW, " ")} ${sist.padStart(sistW, " ")} ${blank}`);
     }
   }
   lines.push(ctx.sep2);
@@ -867,7 +872,7 @@ function renderTomaInventario(data, options = {}) {
 }
 function renderItemTable(lines, items, ctx, nameKey = "nombre", renderOperationalComments = true) {
   if (!items.length) return;
-  lines.push(ctx.width >= 42 ? "CANT  PRODUCTO                V.UNI    TOTAL" : "CANT  PRODUCTO");
+  lines.push(ctx.width >= 42 ? "CANT  PRODUCTO                V.UNI    TOTAL" : leftRight("CANT PRODUCTO", "TOTAL", ctx.width));
   lines.push(ctx.sep);
   for (const item of items) renderItem(lines, item, ctx, nameKey, renderOperationalComments);
   lines.push(ctx.sep);
@@ -883,8 +888,7 @@ function renderItem(lines, item, ctx, nameKey, renderOperationalComments) {
   if (ctx.width >= 42) {
     lines.push(`${String(qty).padStart(3, " ")}  ${name.substring(0, 22).padEnd(22, " ")} ${rightPadMoney(formatMoney(unit), 8)} ${rightPadMoney(`$${formatMoney(net)}`, 8)}`);
   } else {
-    lines.push(`${String(qty).padStart(3, " ")}  ${name.substring(0, Math.max(10, ctx.width - 6))}`);
-    lines.push(leftRight("      Total:", money(net), ctx.width));
+    lines.push(itemRow(qty, name, money(net), ctx.width));
   }
   if (item.es_cortesia) lines.push("      ** CORTESIA **");
   if (descAmount > 0) lines.push(`      ${descPct > 0 ? `Dcto -${descPct}% (-${money(descAmount)})` : `Dcto (-${money(descAmount)})`}`);

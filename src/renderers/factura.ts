@@ -6,6 +6,7 @@ import {
   formatDate,
   formatMoney,
   formatTime,
+  itemRow,
   labelMetodo,
   leftRight,
   rightPadMoney,
@@ -64,7 +65,7 @@ function renderItems(lines: string[], items: ItemEvento[], width: number, sep: s
   if (!items.length) return;
 
   if (width >= 42) lines.push('CANT  PRODUCTO                V.UNI    TOTAL');
-  else lines.push('CANT  PRODUCTO');
+  else lines.push(leftRight('CANT PRODUCTO', 'TOTAL', width));
   lines.push(sep);
 
   for (const item of items) {
@@ -106,18 +107,16 @@ function renderWideItem(lines: string[], item: ItemEvento): void {
 }
 
 function renderNarrowItem(lines: string[], item: ItemEvento, width: number): void {
-  const qty = String(item.cantidad || 1).padStart(3, ' ');
-  const name = sanitizeText(item.nombre || item.plato || '').substring(0, Math.max(10, width - 6));
-  const price = Number(item.precio_unitario) || 0;
   const qtyNum = Number(item.cantidad) || 1;
+  const price = Number(item.precio_unitario) || 0;
   const descAmount = Number(item.descuento_monto) || 0;
   const gross = price * qtyNum;
   const net = item.es_cortesia ? 0 : gross - descAmount;
 
-  lines.push(`${qty}  ${name}`);
-  lines.push(leftRight('      Total:', `$${formatMoney(net)}`, width));
-  if (item.es_cortesia) lines.push('      ** CORTESIA **');
-  if (descAmount > 0) lines.push(`      Dcto (-$${formatMoney(descAmount)})`);
+  // Una sola fila: cant · nombre · total (ahorra papel; el total ya no va abajo).
+  lines.push(itemRow(qtyNum, item.nombre || item.plato || '', `$${formatMoney(net)}`, width));
+  if (item.es_cortesia) lines.push('   ** CORTESIA **');
+  if (descAmount > 0) lines.push(`   Dcto (-$${formatMoney(descAmount)})`);
   renderReason(lines, item.motivo_descuento || (item.es_cortesia ? item.comentario : undefined));
 }
 

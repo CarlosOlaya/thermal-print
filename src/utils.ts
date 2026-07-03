@@ -42,6 +42,19 @@ export function leftRight(left: unknown, right: unknown, width = 48): string {
   return safeLeft + ' '.repeat(Math.max(gap, 1)) + safeRight;
 }
 
+/**
+ * Fila de ítem en UNA sola línea: "cant nombre ........... valor".
+ * El nombre se trunca para que la cantidad, el nombre y el valor derecho quepan en
+ * `width` columnas — uniforme en 58mm y 80mm. Ahorra papel vs. poner el total abajo.
+ */
+export function itemRow(qty: unknown, name: unknown, right: unknown, width = 48): string {
+  const qtyStr = String(Number(qty) || 1).padStart(2, ' ');
+  const safeRight = sanitizeText(right);
+  const nameMax = Math.max(6, width - qtyStr.length - safeRight.length - 2);
+  const nameStr = sanitizeText(name).substring(0, nameMax);
+  return leftRight(`${qtyStr} ${nameStr}`, safeRight, width);
+}
+
 export function rightPadMoney(value: unknown, width: number): string {
   const safe = sanitizeText(value);
   return safe.length >= width ? safe : ' '.repeat(width - safe.length) + safe;

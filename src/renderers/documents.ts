@@ -7,6 +7,7 @@ import {
   formatDate,
   formatMoney,
   formatTime,
+  itemRow,
   labelMetodo,
   leftRight,
   rightPadMoney,
@@ -446,12 +447,17 @@ export function renderTomaInventario(data: ThermalTomaInventarioPayload, options
   const items = arr(data.items);
   const ciego = data.modo_ciego === true;
   const blank = '_'.repeat(ctx.width >= 42 ? 8 : 6);
+  // Columnas 58mm (una sola fila): PRODUCTO · SIST · FISICO.
+  const sistW = 8;
+  const nameW = Math.max(8, ctx.width - blank.length - sistW - 2);
 
   if (data.bodega) lines.push(leftRight('Bodega:', text(data.bodega), ctx.width));
   if (data.generado_por) lines.push(leftRight('Genera:', text(data.generado_por), ctx.width));
   pushDateTime(lines, ctx);
   lines.push(ctx.sep);
-  lines.push(escBold(true) + (ctx.width >= 42 ? 'PRODUCTO              SISTEMA   FISICO' : 'PRODUCTO            SIST  FISICO') + escBold(false));
+  lines.push(escBold(true) + (ctx.width >= 42
+    ? 'PRODUCTO              SISTEMA   FISICO'
+    : `${'PRODUCTO'.padEnd(nameW)} ${'SIST'.padStart(sistW)} FISICO`) + escBold(false));
   lines.push(ctx.sep);
 
   if (!items.length) lines.push(center('Sin productos para tomar.', ctx.width));
@@ -463,8 +469,8 @@ export function renderTomaInventario(data: ThermalTomaInventarioPayload, options
     if (ctx.width >= 42) {
       lines.push(`${nombre.substring(0, 20).padEnd(20, ' ')} ${sist.padStart(8, ' ')}  ${blank}`);
     } else {
-      lines.push(nombre.substring(0, ctx.width));
-      lines.push(leftRight(`  Sist: ${sist}`, blank, ctx.width));
+      // Una sola fila: PRODUCTO · SIST · FISICO (sin truncar el stock).
+      lines.push(`${nombre.substring(0, nameW).padEnd(nameW, ' ')} ${sist.padStart(sistW, ' ')} ${blank}`);
     }
   }
 
@@ -485,7 +491,7 @@ export function renderTomaInventario(data: ThermalTomaInventarioPayload, options
 function renderItemTable(lines: string[], items: Row[], ctx: Ctx, nameKey = 'nombre', renderOperationalComments = true): void {
   if (!items.length) return;
 
-  lines.push(ctx.width >= 42 ? 'CANT  PRODUCTO                V.UNI    TOTAL' : 'CANT  PRODUCTO');
+  lines.push(ctx.width >= 42 ? 'CANT  PRODUCTO                V.UNI    TOTAL' : leftRight('CANT PRODUCTO', 'TOTAL', ctx.width));
   lines.push(ctx.sep);
   for (const item of items) renderItem(lines, item, ctx, nameKey, renderOperationalComments);
   lines.push(ctx.sep);
@@ -503,8 +509,8 @@ function renderItem(lines: string[], item: Row, ctx: Ctx, nameKey: string, rende
   if (ctx.width >= 42) {
     lines.push(`${String(qty).padStart(3, ' ')}  ${name.substring(0, 22).padEnd(22, ' ')} ${rightPadMoney(formatMoney(unit), 8)} ${rightPadMoney(`$${formatMoney(net)}`, 8)}`);
   } else {
-    lines.push(`${String(qty).padStart(3, ' ')}  ${name.substring(0, Math.max(10, ctx.width - 6))}`);
-    lines.push(leftRight('      Total:', money(net), ctx.width));
+    // Una sola fila: cant · nombre · total (ahorra papel).
+    lines.push(itemRow(qty, name, money(net), ctx.width));
   }
 
   if (item.es_cortesia) lines.push('      ** CORTESIA **');

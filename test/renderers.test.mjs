@@ -256,5 +256,6 @@ const tomaInventarioCiega = renderTomaInventario({
 }, { now, columns: 32 });
 
 assert.match(tomaInventarioCiega, /TOMA DE INVENTARIO/);
-assert.match(tomaInventarioCiega, /Sist: ______/);
+// Modo ciego + una sola fila: el producto sale con las columnas SIST/FISICO en blanco.
+assert.match(tomaInventarioCiega, /Tomate\s+_{4,}/);
 assert.doesNotMatch(tomaInventarioCiega, /3 kg/);
