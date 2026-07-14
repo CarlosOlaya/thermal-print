@@ -259,3 +259,46 @@ assert.match(tomaInventarioCiega, /TOMA DE INVENTARIO/);
 // Modo ciego + una sola fila: el producto sale con las columnas SIST/FISICO en blanco.
 assert.match(tomaInventarioCiega, /Tomate\s+_{4,}/);
 assert.doesNotMatch(tomaInventarioCiega, /3 kg/);
+
+// ── Tirilla fiscal (documento electrónico DIAN): número, CUFE/CUDE y QR nativo ──
+const feTicket = {
+  tipo_label: 'DOCUMENTO EQUIVALENTE POS',
+  numero: 'EPOS855848',
+  es_cufe: false,
+  cufe: '7b7f54d01d1dda9fef5f783f114cd2745c3e451844df2d37ed701eed3640a0457c9afeda2c609863a1cb2f2f3e0a2fc1',
+  resolucion: 'Res 18760000001',
+  adquirente: 'Carlos Olaya - NIT 1075317251-8',
+  qr: 'NumFac: EPOS855848\nQRCode: https://catalogo-vpfe-hab.dian.gov.co/document/searchqr?documentkey=abc',
+  url: 'https://catalogo-vpfe-hab.dian.gov.co/document/searchqr?documentkey=abc',
+};
+for (const w of [32, 48]) {
+  const fiscal = renderFactura({
+    tenant_nombre: 'Restaurante Prueba', nit: '900559088-2', numero_factura: 'PED-00064',
+    items: [{ cantidad: 1, nombre: 'Alitas', precio_unitario: 27900 }],
+    subtotal: 27900, total: 27900, metodo_pago: 'efectivo', fe: feTicket,
+  }, { now, columns: w });
+  assert.match(fiscal, /DOCUMENTO EQUIVALENTE POS/);
+  assert.match(fiscal, /EPOS855848/);
+  assert.match(fiscal, /CUDE:/);
+  assert.match(fiscal, /Carlos Olaya - NIT 1075317251-8/);
+  // El CUFE de 96 chars quedó ENVUELTO en fragmentos que caben en el ancho
+  const fragmentosCufe = fiscal.split('\n').filter(l => /^[0-9a-f]{8,}$/.test(l.trim()));
+  assert.ok(fragmentosCufe.length >= 2, `CUFE no se envolvió en ${w} col`);
+  for (const frag of fragmentosCufe) assert.ok(frag.trim().length <= w, `fragmento CUFE excede ${w}`);
+  // El QR NATIVO aparece como comando GS ( k en los bytes
+  const bytes = textToEscPosBytes(fiscal, { cut: true });
+  let hasQr = false;
+  for (let i = 0; i < bytes.length - 2; i++) {
+    if (bytes[i] === 0x1d && bytes[i + 1] === 0x28 && bytes[i + 2] === 0x6b) { hasQr = true; break; }
+  }
+  assert.ok(hasQr, `QR nativo ausente en ${w} col`);
+}
+
+// Sin `fe`: la tirilla sigue siendo de control interno (retrocompatible)
+const noFiscal = renderFactura({
+  tenant_nombre: 'Restaurante', numero_factura: 'PED-1', items: [], total: 0,
+}, { now, columns: 48 });
+assert.match(noFiscal, /SOLO PARA CONTROL INTERNO/);
+assert.doesNotMatch(noFiscal, /CUDE:|CUFE:/);
+
+console.log('OK — tirilla fiscal DIAN (QR + CUFE, 58mm y 80mm)');

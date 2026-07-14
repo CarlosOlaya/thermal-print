@@ -89,7 +89,30 @@ export interface FacturaCerradaPayload {
         barrio?: string;
         direccion?: string;
     };
+    /**
+     * Datos fiscales del documento electrónico DIAN. Solo presente cuando el
+     * pedido ya tiene un documento ACEPTADO: convierte la tirilla de "control
+     * interno" en la representación gráfica fiscal (número DIAN, CUFE/CUDE, QR).
+     */
+    fe?: FacturaElectronicaTicket;
     [key: string]: unknown;
+}
+export interface FacturaElectronicaTicket {
+    /** Ej. "FACTURA ELECTRONICA DE VENTA" / "DOCUMENTO EQUIVALENTE POS" */
+    tipo_label: string;
+    /** Número completo con prefijo, ej. "SETP992468936" */
+    numero: string;
+    /** true = CUFE (factura) · false = CUDE (POS/otros) */
+    es_cufe?: boolean;
+    cufe?: string;
+    /** Línea de resolución de numeración autorizada */
+    resolucion?: string;
+    /** Adquirente identificado, ej. "Carlos Olaya - NIT 1075317251-8" */
+    adquirente?: string;
+    /** Contenido oficial del QR de la DIAN (qrCodeContent) */
+    qr?: string;
+    /** URL pública de verificación del documento */
+    url?: string;
 }
 export type ThermalDocumentPayload = Record<string, unknown>;
 export interface ThermalInventarioItem {

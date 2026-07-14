@@ -32,6 +32,7 @@ __export(index_exports, {
   formatTime: () => formatTime,
   labelMetodo: () => labelMetodo,
   leftRight: () => leftRight,
+  qrMarker: () => qrMarker,
   renderCierreCaja: () => renderCierreCaja,
   renderComanda: () => renderComanda,
   renderComandaAnulacion: () => renderComandaAnulacion,
@@ -165,6 +166,100 @@ function escBeep(count = 2, duration = 3) {
   const safeDuration = Math.max(1, Math.min(9, Math.trunc(duration)));
   return ESC + "B" + String.fromCharCode(safeCount, safeDuration);
 }
+var QR_SENTINEL = "";
+function qrMarker(data, moduleSize = 6) {
+  const size = Math.max(3, Math.min(8, Math.trunc(moduleSize)));
+  return QR_SENTINEL + String.fromCharCode(size) + (data || "") + QR_SENTINEL;
+}
+function escQrCommandBytes(data, moduleSize) {
+  const enc = [];
+  for (const ch of data) enc.push(ch.charCodeAt(0) & 255);
+  const store = enc.length + 3;
+  return [
+    27,
+    97,
+    1,
+    // ESC a 1 — centrar
+    29,
+    40,
+    107,
+    4,
+    0,
+    49,
+    65,
+    50,
+    0,
+    // modelo 2
+    29,
+    40,
+    107,
+    3,
+    0,
+    49,
+    67,
+    moduleSize & 255,
+    // tamaño módulo
+    29,
+    40,
+    107,
+    3,
+    0,
+    49,
+    69,
+    49,
+    // corrección M
+    29,
+    40,
+    107,
+    store & 255,
+    store >> 8 & 255,
+    49,
+    80,
+    48,
+    ...enc,
+    // datos
+    29,
+    40,
+    107,
+    3,
+    0,
+    49,
+    81,
+    48,
+    // imprimir
+    27,
+    97,
+    0
+    // ESC a 0 — volver a izquierda
+  ];
+}
+function textSegmentToBytes(segment) {
+  const bytes = [];
+  for (let i = 0; i < segment.length; i++) {
+    const code = segment.charCodeAt(i);
+    if (code === 27 || code === 29 || code === 10 || code === 13) {
+      bytes.push(code);
+      if (code === 27 || code === 29) {
+        const command = segment.charCodeAt(i + 1);
+        if (Number.isFinite(command)) {
+          bytes.push(command);
+          const paramCount = escPosParamCount(code, command);
+          for (let param = 0; param < paramCount && i + 2 + param < segment.length; param++) {
+            bytes.push(segment.charCodeAt(i + 2 + param) & 255);
+          }
+          i += 1 + paramCount;
+        }
+      }
+      continue;
+    }
+    const safe = sanitizeText(segment[i]);
+    for (const safeChar of safe) {
+      const safeCode = safeChar.charCodeAt(0);
+      if (safeCode >= 32 && safeCode <= 126) bytes.push(safeCode);
+    }
+  }
+  return bytes;
+}
 function textToEscPosBytes(text2, options = {}) {
   const bytes = [27, 64];
   const document = [
@@ -173,27 +268,15 @@ function textToEscPosBytes(text2, options = {}) {
     options.cut ? escCut() : "",
     options.beepAfterPrint ? escBeep() : ""
   ].join("");
-  for (let i = 0; i < document.length; i++) {
-    const code = document.charCodeAt(i);
-    if (code === 27 || code === 29 || code === 10 || code === 13) {
-      bytes.push(code);
-      if (code === 27 || code === 29) {
-        const command = document.charCodeAt(i + 1);
-        if (Number.isFinite(command)) {
-          bytes.push(command);
-          const paramCount = escPosParamCount(code, command);
-          for (let param = 0; param < paramCount && i + 2 + param < document.length; param++) {
-            bytes.push(document.charCodeAt(i + 2 + param) & 255);
-          }
-          i += 1 + paramCount;
-        }
-      }
-      continue;
-    }
-    const safe = sanitizeText(document[i]);
-    for (const safeChar of safe) {
-      const safeCode = safeChar.charCodeAt(0);
-      if (safeCode >= 32 && safeCode <= 126) bytes.push(safeCode);
+  const segmentos = document.split(QR_SENTINEL);
+  for (let s = 0; s < segmentos.length; s++) {
+    if (s % 2 === 1) {
+      const seg = segmentos[s];
+      const moduleSize = seg.charCodeAt(0) || 6;
+      const data = seg.slice(1);
+      if (data) bytes.push(...escQrCommandBytes(data, moduleSize));
+    } else {
+      bytes.push(...textSegmentToBytes(segmentos[s]));
     }
   }
   return new Uint8Array(bytes);
@@ -328,8 +411,12 @@ function renderFactura(factura, options = {}) {
   renderItems(lines, factura.items || [], width, sep);
   renderTotals(lines, factura, width, sep2);
   renderPayments(lines, factura, width, sep);
-  lines.push("");
-  lines.push(center("** SOLO PARA CONTROL INTERNO **", width));
+  if (factura.fe) {
+    renderFiscal(lines, factura.fe, width, sep2);
+  } else {
+    lines.push("");
+    lines.push(center("** SOLO PARA CONTROL INTERNO **", width));
+  }
   lines.push(center("Gracias por su visita!", width));
   lines.push(footer(width, options.footer));
   return lines.join("\n");
@@ -341,6 +428,35 @@ function renderCliente(lines, factura) {
   if (factura.cliente_direccion) lines.push(`Dir: ${sanitizeText(factura.cliente_direccion)}`);
   if (factura.cliente_barrio) lines.push(`Barrio: ${sanitizeText(factura.cliente_barrio)}`);
   if (factura.localizador) lines.push(`Localizador: ${sanitizeText(factura.localizador)}`);
+}
+function renderFiscal(lines, fe, width, sep2) {
+  lines.push(sep2);
+  lines.push(center(sanitizeText(fe.tipo_label || "DOCUMENTO ELECTRONICO"), width));
+  lines.push(center(sanitizeText(fe.numero || ""), width));
+  if (fe.adquirente) lines.push(center(sanitizeText(fe.adquirente), width));
+  if (fe.resolucion) {
+    for (const l of wrap(sanitizeText(fe.resolucion), width)) lines.push(center(l, width));
+  }
+  if (fe.cufe) {
+    lines.push(center(fe.es_cufe === false ? "CUDE:" : "CUFE:", width));
+    for (const l of wrap(fe.cufe, width)) lines.push(center(l, width));
+  }
+  if (fe.qr) {
+    lines.push("");
+    lines.push(qrMarker(fe.qr, width >= 42 ? 7 : 5));
+    lines.push("");
+  }
+  if (fe.url) {
+    lines.push(center("Verifica en la DIAN:", width));
+    for (const l of wrap(fe.url, width)) lines.push(center(l, width));
+  }
+}
+function wrap(text2, width) {
+  const clean = String(text2 || "");
+  if (clean.length <= width) return [clean];
+  const out = [];
+  for (let i = 0; i < clean.length; i += width) out.push(clean.slice(i, i + width));
+  return out;
 }
 function renderItems(lines, items, width, sep) {
   if (!items.length) return;
@@ -1128,6 +1244,7 @@ function isRecord(value) {
   formatTime,
   labelMetodo,
   leftRight,
+  qrMarker,
   renderCierreCaja,
   renderComanda,
   renderComandaAnulacion,

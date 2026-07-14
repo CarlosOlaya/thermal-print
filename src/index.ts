@@ -1,5 +1,6 @@
 export type {
   FacturaCerradaPayload,
+  FacturaElectronicaTicket,
   ItemEvento,
   PagoEventoItem,
   ThermalComandaItem,
@@ -18,6 +19,7 @@ export {
   escCut,
   escFontSize,
   escLeftMargin,
+  qrMarker,
   textToEscPosBytes,
   type EscPosByteOptions,
 } from './escpos';

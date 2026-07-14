@@ -1,4 +1,11 @@
-import type { FacturaCerradaPayload, ItemEvento, PagoEventoItem, ThermalRenderOptions } from '../types';
+import type {
+  FacturaCerradaPayload,
+  FacturaElectronicaTicket,
+  ItemEvento,
+  PagoEventoItem,
+  ThermalRenderOptions,
+} from '../types';
+import { qrMarker } from '../escpos';
 import {
   center,
   clampColumns,
@@ -41,8 +48,14 @@ export function renderFactura(factura: FacturaCerradaPayload, options: ThermalRe
   renderTotals(lines, factura, width, sep2);
   renderPayments(lines, factura, width, sep);
 
-  lines.push('');
-  lines.push(center('** SOLO PARA CONTROL INTERNO **', width));
+  // Con documento electrónico ACEPTADO la tirilla es fiscal (número DIAN +
+  // CUFE/CUDE + QR); sin él, sigue siendo control interno.
+  if (factura.fe) {
+    renderFiscal(lines, factura.fe, width, sep2);
+  } else {
+    lines.push('');
+    lines.push(center('** SOLO PARA CONTROL INTERNO **', width));
+  }
   lines.push(center('Gracias por su visita!', width));
   lines.push(footer(width, options.footer));
 
@@ -59,6 +72,47 @@ function renderCliente(lines: string[], factura: FacturaCerradaPayload): void {
   if (factura.cliente_direccion) lines.push(`Dir: ${sanitizeText(factura.cliente_direccion)}`);
   if (factura.cliente_barrio) lines.push(`Barrio: ${sanitizeText(factura.cliente_barrio)}`);
   if (factura.localizador) lines.push(`Localizador: ${sanitizeText(factura.localizador)}`);
+}
+
+// Bloque fiscal DIAN: tipo + número, adquirente, CUFE/CUDE (envuelto al ancho),
+// resolución, QR nativo y URL de verificación. Funciona en 58mm y 80mm porque
+// todo se centra/envuelve al `width` real.
+function renderFiscal(
+  lines: string[],
+  fe: FacturaElectronicaTicket,
+  width: number,
+  sep2: string,
+): void {
+  lines.push(sep2);
+  lines.push(center(sanitizeText(fe.tipo_label || 'DOCUMENTO ELECTRONICO'), width));
+  lines.push(center(sanitizeText(fe.numero || ''), width));
+  if (fe.adquirente) lines.push(center(sanitizeText(fe.adquirente), width));
+  if (fe.resolucion) {
+    for (const l of wrap(sanitizeText(fe.resolucion), width)) lines.push(center(l, width));
+  }
+  if (fe.cufe) {
+    lines.push(center(fe.es_cufe === false ? 'CUDE:' : 'CUFE:', width));
+    for (const l of wrap(fe.cufe, width)) lines.push(center(l, width));
+  }
+  if (fe.qr) {
+    lines.push('');
+    // Módulo más pequeño en 58mm para que el QR quepa en el ancho angosto
+    lines.push(qrMarker(fe.qr, width >= 42 ? 7 : 5));
+    lines.push('');
+  }
+  if (fe.url) {
+    lines.push(center('Verifica en la DIAN:', width));
+    for (const l of wrap(fe.url, width)) lines.push(center(l, width));
+  }
+}
+
+/** Parte un texto largo (CUFE, URL) en líneas de a lo sumo `width` caracteres */
+function wrap(text: string, width: number): string[] {
+  const clean = String(text || '');
+  if (clean.length <= width) return [clean];
+  const out: string[] = [];
+  for (let i = 0; i < clean.length; i += width) out.push(clean.slice(i, i + width));
+  return out;
 }
 
 function renderItems(lines: string[], items: ItemEvento[], width: number, sep: string): void {
