@@ -65,9 +65,24 @@ export function renderFactura(factura: FacturaCerradaPayload, options: ThermalRe
 // Datos del cliente y localizador — todos opcionales: cada línea solo se imprime
 // si el pedido trae ese dato (igual que en la comanda). Mantiene la trazabilidad
 // del cliente en la factura ya pagada.
+/** Sigla legible del código DIAN de tipo de documento */
+const TIPO_DOC_SIGLA: Record<string, string> = {
+  '13': 'CC',
+  '31': 'NIT',
+  '22': 'CE',
+  '41': 'Pasaporte',
+};
+
 function renderCliente(lines: string[], factura: FacturaCerradaPayload): void {
   const nombre = factura.cliente;
   if (nombre && nombre !== 'Consumidor final') lines.push(`Cliente: ${sanitizeText(nombre)}`);
+  // Trazabilidad: el documento identifica al cliente aunque el restaurante no
+  // tenga facturación electrónica (con FE, el bloque fiscal repite al
+  // adquirente DECLARADO — pueden diferir y ambos son informativos).
+  if (factura.cliente_documento) {
+    const sigla = TIPO_DOC_SIGLA[factura.cliente_tipo_documento ?? ''] ?? 'Doc';
+    lines.push(`${sigla}: ${sanitizeText(factura.cliente_documento)}`);
+  }
   if (factura.cliente_telefono) lines.push(`Tel: ${sanitizeText(factura.cliente_telefono)}`);
   if (factura.cliente_direccion) lines.push(`Dir: ${sanitizeText(factura.cliente_direccion)}`);
   if (factura.cliente_barrio) lines.push(`Barrio: ${sanitizeText(factura.cliente_barrio)}`);
@@ -189,6 +204,14 @@ function renderTotals(lines: string[], factura: FacturaCerradaPayload, width: nu
     lines.push(leftRight('NETO:', `$${formatMoney(factura.subtotal)}`, width));
   }
   if (Number(factura.monto_iva) > 0) lines.push(leftRight('IVA:', `$${formatMoney(factura.monto_iva)}`, width));
+  // Impuesto INCLUIDO en el precio (norma CO): NO se suma al total, se separa.
+  // Debe decir lo mismo que se le declaró a la DIAN, o la tirilla contradice al
+  // documento que representa.
+  const imp = factura.fe?.impuesto;
+  if (imp && imp.monto > 0) {
+    lines.push(leftRight('BASE GRAVABLE:', `$${formatMoney(imp.base)}`, width));
+    lines.push(leftRight(`${imp.label} ${imp.tarifa}%:`, `$${formatMoney(imp.monto)}`, width));
+  }
   if (Number(factura.propina) > 0) lines.push(leftRight('SERVICIO:', `$${formatMoney(factura.propina)}`, width));
   lines.push(sep2);
   lines.push(leftRight('TOTAL PEDIDO:', `$ ${formatMoney(factura.total)}`, width));

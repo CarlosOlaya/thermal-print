@@ -294,6 +294,64 @@ for (const w of [32, 48]) {
   assert.ok(hasQr, `QR nativo ausente en ${w} col`);
 }
 
+// ── Impuesto discriminado (INC/IVA) ────────────────────────────────────────
+// El precio de carta YA lo incluye (Art. 512-9 ET): la tirilla lo SEPARA, no
+// lo suma. El total tiene que quedar igualito al que pagó el comensal.
+for (const w of [32, 48]) {
+  const conInc = renderFactura({
+    tenant_nombre: 'Restaurante Prueba', numero_factura: 'PED-00065',
+    items: [{ cantidad: 1, nombre: 'Alitas', precio_unitario: 27900 }],
+    subtotal: 27900, total: 27900, metodo_pago: 'efectivo',
+    fe: { ...feTicket, impuesto: { label: 'IMPOCONSUMO', tarifa: 8, base: 25833.33, monto: 2066.67 } },
+  }, { now, columns: w });
+  assert.match(conInc, /BASE GRAVABLE:/, `base ausente en ${w} col`);
+  assert.match(conInc, /IMPOCONSUMO 8%:/, `INC ausente en ${w} col`);
+  // Lo único que no puede moverse: el total sigue siendo el del POS
+  assert.match(conInc, /TOTAL PEDIDO:\s+\$ ?27\.900/, `total alterado en ${w} col`);
+}
+
+// IVA 19% usa la misma ruta, solo cambia la etiqueta
+const conIva = renderFactura({
+  tenant_nombre: 'Restaurante Prueba', numero_factura: 'PED-00066',
+  items: [{ cantidad: 1, nombre: 'Alitas', precio_unitario: 27900 }],
+  subtotal: 27900, total: 27900, metodo_pago: 'efectivo',
+  fe: { ...feTicket, impuesto: { label: 'IVA', tarifa: 19, base: 23445.38, monto: 4454.62 } },
+}, { now, columns: 48 });
+assert.match(conIva, /IVA 19%:/);
+assert.doesNotMatch(conIva, /IMPOCONSUMO/);
+
+// ── Documento del cliente (trazabilidad, con o sin FE) ─────────────────────
+const conDocumento = renderFactura({
+  tenant_nombre: 'Restaurante Prueba', numero_factura: 'PED-00068',
+  cliente: 'Empresa ACME SAS', cliente_documento: '900123456', cliente_tipo_documento: '31',
+  items: [{ cantidad: 1, nombre: 'Alitas', precio_unitario: 27900 }],
+  subtotal: 27900, total: 27900, metodo_pago: 'efectivo',
+}, { now, columns: 32 });
+assert.match(conDocumento, /Cliente: Empresa ACME SAS/);
+assert.match(conDocumento, /NIT: 900123456/);
+
+const conCedula = renderFactura({
+  tenant_nombre: 'Restaurante Prueba', numero_factura: 'PED-00069',
+  cliente: 'Ana Perez', cliente_documento: '1020304050', cliente_tipo_documento: '13',
+  items: [], subtotal: 0, total: 0, metodo_pago: 'efectivo',
+}, { now, columns: 32 });
+assert.match(conCedula, /CC: 1020304050/);
+
+// Sin documento no se inventa la línea
+const sinDocumento = renderFactura({
+  tenant_nombre: 'Restaurante Prueba', numero_factura: 'PED-00070',
+  cliente: 'Pedro', items: [], subtotal: 0, total: 0, metodo_pago: 'efectivo',
+}, { now, columns: 32 });
+assert.doesNotMatch(sinDocumento, /CC:|NIT:|Doc:/);
+
+// Sin impuesto configurado: la tirilla no inventa líneas
+const feSinImpuesto = renderFactura({
+  tenant_nombre: 'Restaurante Prueba', numero_factura: 'PED-00067',
+  items: [{ cantidad: 1, nombre: 'Alitas', precio_unitario: 27900 }],
+  subtotal: 27900, total: 27900, metodo_pago: 'efectivo', fe: feTicket,
+}, { now, columns: 48 });
+assert.doesNotMatch(feSinImpuesto, /BASE GRAVABLE|IMPOCONSUMO/);
+
 // Sin `fe`: la tirilla sigue siendo de control interno (retrocompatible)
 const noFiscal = renderFactura({
   tenant_nombre: 'Restaurante', numero_factura: 'PED-1', items: [], total: 0,
@@ -301,4 +359,4 @@ const noFiscal = renderFactura({
 assert.match(noFiscal, /SOLO PARA CONTROL INTERNO/);
 assert.doesNotMatch(noFiscal, /CUDE:|CUFE:/);
 
-console.log('OK — tirilla fiscal DIAN (QR + CUFE, 58mm y 80mm)');
+console.log('OK — tirilla fiscal DIAN (QR + CUFE + impuesto discriminado, 58mm y 80mm)');

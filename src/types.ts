@@ -69,6 +69,10 @@ export interface FacturaCerradaPayload {
   localizador?: string;
   mesero?: string;
   cliente?: string;
+  /** Documento del cliente (cédula/NIT) — trazabilidad en papel */
+  cliente_documento?: string;
+  /** Código DIAN del tipo de documento ('13' CC · '31' NIT · '22' CE · '41' pasaporte) */
+  cliente_tipo_documento?: string;
   cliente_telefono?: string;
   cliente_direccion?: string;
   cliente_barrio?: string;
@@ -120,6 +124,22 @@ export interface FacturaElectronicaTicket {
   qr?: string;
   /** URL pública de verificación del documento */
   url?: string;
+  /**
+   * Impuesto discriminado tal como lo declara el documento ante la DIAN.
+   * En Colombia el precio de la carta ya lo incluye (Art. 512-9 ET), así que
+   * NO se suma al total: se separa. La tirilla es la representación gráfica del
+   * documento, y debe mostrar lo MISMO que se le declaró a la DIAN.
+   */
+  impuesto?: {
+    /** Ej. "IMPOCONSUMO" / "IVA" */
+    label: string;
+    /** Tarifa declarada, ej. 8 */
+    tarifa: number;
+    /** Base gravable */
+    base: number;
+    /** Monto del impuesto */
+    monto: number;
+  };
 }
 
 export type ThermalDocumentPayload = Record<string, unknown>;

@@ -421,9 +421,19 @@ function renderFactura(factura, options = {}) {
   lines.push(footer(width, options.footer));
   return lines.join("\n");
 }
+var TIPO_DOC_SIGLA = {
+  "13": "CC",
+  "31": "NIT",
+  "22": "CE",
+  "41": "Pasaporte"
+};
 function renderCliente(lines, factura) {
   const nombre = factura.cliente;
   if (nombre && nombre !== "Consumidor final") lines.push(`Cliente: ${sanitizeText(nombre)}`);
+  if (factura.cliente_documento) {
+    const sigla = TIPO_DOC_SIGLA[factura.cliente_tipo_documento ?? ""] ?? "Doc";
+    lines.push(`${sigla}: ${sanitizeText(factura.cliente_documento)}`);
+  }
   if (factura.cliente_telefono) lines.push(`Tel: ${sanitizeText(factura.cliente_telefono)}`);
   if (factura.cliente_direccion) lines.push(`Dir: ${sanitizeText(factura.cliente_direccion)}`);
   if (factura.cliente_barrio) lines.push(`Barrio: ${sanitizeText(factura.cliente_barrio)}`);
@@ -517,6 +527,11 @@ function renderTotals(lines, factura, width, sep2) {
     lines.push(leftRight("NETO:", `$${formatMoney(factura.subtotal)}`, width));
   }
   if (Number(factura.monto_iva) > 0) lines.push(leftRight("IVA:", `$${formatMoney(factura.monto_iva)}`, width));
+  const imp = factura.fe?.impuesto;
+  if (imp && imp.monto > 0) {
+    lines.push(leftRight("BASE GRAVABLE:", `$${formatMoney(imp.base)}`, width));
+    lines.push(leftRight(`${imp.label} ${imp.tarifa}%:`, `$${formatMoney(imp.monto)}`, width));
+  }
   if (Number(factura.propina) > 0) lines.push(leftRight("SERVICIO:", `$${formatMoney(factura.propina)}`, width));
   lines.push(sep2);
   lines.push(leftRight("TOTAL PEDIDO:", `$ ${formatMoney(factura.total)}`, width));
