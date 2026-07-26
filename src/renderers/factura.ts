@@ -119,6 +119,16 @@ function renderFiscal(
     lines.push(center('Verifica en la DIAN:', width));
     for (const l of wrap(fe.url, width)) lines.push(center(l, width));
   }
+  // Art. 11 num. 18 Res. 000042/2020 — va de último, después del QR, para no
+  // desplazar los datos que el cliente busca primero (número, CUFE, QR).
+  // Se parte por segmento (" - ") antes de envolver: `wrap` corta por carácter
+  // y en 58mm dejaría los NIT partidos a la mitad, ilegibles en un bloque legal.
+  if (fe.software) {
+    lines.push('');
+    for (const parte of sanitizeText(fe.software).split(' - ')) {
+      for (const l of wrap(parte.trim(), width)) lines.push(center(l, width));
+    }
+  }
 }
 
 /** Parte un texto largo (CUFE, URL) en líneas de a lo sumo `width` caracteres */

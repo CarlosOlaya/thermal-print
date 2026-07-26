@@ -407,6 +407,12 @@ function renderFiscal(lines, fe, width, sep2) {
     lines.push(center("Verifica en la DIAN:", width));
     for (const l of wrap(fe.url, width)) lines.push(center(l, width));
   }
+  if (fe.software) {
+    lines.push("");
+    for (const parte of sanitizeText(fe.software).split(" - ")) {
+      for (const l of wrap(parte.trim(), width)) lines.push(center(l, width));
+    }
+  }
 }
 function wrap(text2, width) {
   const clean = String(text2 || "");

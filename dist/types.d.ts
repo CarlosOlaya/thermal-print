@@ -118,6 +118,16 @@ export interface FacturaElectronicaTicket {
     /** URL pública de verificación del documento */
     url?: string;
     /**
+     * Identificación del software y del proveedor tecnológico, exigida por el
+     * artículo 11 numeral 18 de la Res. 000042 de 2020:
+     * «Apellidos y nombre o razón social y NIT, del fabricante del software, el
+     * nombre del software y del proveedor tecnológico si lo tuviere.»
+     * La arma la API (única fuente de esos datos) y la tirilla solo la imprime.
+     * Ej. "Software: Foodly · Fabricante: Foodly NIT 1075317251-8 ·
+     *      Proveedor tecnológico: Soluciones Alegra SAS NIT 900000000-0"
+     */
+    software?: string;
+    /**
      * Impuesto discriminado tal como lo declara el documento ante la DIAN.
      * En Colombia el precio de la carta ya lo incluye (Art. 512-9 ET), así que
      * NO se suma al total: se separa. La tirilla es la representación gráfica del
