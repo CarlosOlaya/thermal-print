@@ -113,6 +113,13 @@ export interface FacturaElectronicaTicket {
     resolucion?: string;
     /** Adquirente identificado, ej. "Carlos Olaya - NIT 1075317251-8" */
     adquirente?: string;
+    /**
+     * Fecha y hora de EXPEDICIÓN — la validación por la DIAN (art. 11 num. 6 de
+     * la Res. 000042/2020). Es distinta de la fecha de generación que ya va
+     * arriba en la tirilla (num. 5), aunque suelan coincidir al segundo.
+     * Ej. "16/07/2026 11:48".
+     */
+    fecha_expedicion?: string;
     /** Contenido oficial del QR de la DIAN (qrCodeContent) */
     qr?: string;
     /** URL pública de verificación del documento */

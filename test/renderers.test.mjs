@@ -268,6 +268,7 @@ const feTicket = {
   cufe: '7b7f54d01d1dda9fef5f783f114cd2745c3e451844df2d37ed701eed3640a0457c9afeda2c609863a1cb2f2f3e0a2fc1',
   resolucion: 'Res 18760000001',
   adquirente: 'Carlos Olaya - NIT 1075317251-8',
+  fecha_expedicion: '16/07/2026 11:48',
   qr: 'NumFac: EPOS855848\nQRCode: https://catalogo-vpfe-hab.dian.gov.co/document/searchqr?documentkey=abc',
   url: 'https://catalogo-vpfe-hab.dian.gov.co/document/searchqr?documentkey=abc',
 };
@@ -281,6 +282,7 @@ for (const w of [32, 48]) {
   assert.match(fiscal, /EPOS855848/);
   assert.match(fiscal, /CUDE:/);
   assert.match(fiscal, /Carlos Olaya - NIT 1075317251-8/);
+  assert.match(fiscal, /Expedicion: 16\/07\/2026 11:48/);
   // El CUFE de 96 chars quedó ENVUELTO en fragmentos que caben en el ancho
   const fragmentosCufe = fiscal.split('\n').filter(l => /^[0-9a-f]{8,}$/.test(l.trim()));
   assert.ok(fragmentosCufe.length >= 2, `CUFE no se envolvió en ${w} col`);

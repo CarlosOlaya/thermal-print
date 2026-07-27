@@ -140,6 +140,11 @@ function renderFiscal(
   lines.push(center(sanitizeText(fe.tipo_label || 'DOCUMENTO ELECTRONICO'), width));
   lines.push(center(sanitizeText(fe.numero || ''), width));
   if (fe.adquirente) lines.push(center(sanitizeText(fe.adquirente), width));
+  // Art. 11 num. 6: la fecha de EXPEDICIÓN (validación DIAN) es distinta de la
+  // de generación que ya va arriba de la tirilla.
+  if (fe.fecha_expedicion) {
+    lines.push(center(`Expedicion: ${sanitizeText(fe.fecha_expedicion)}`, width));
+  }
   if (fe.resolucion) {
     for (const l of wrap(sanitizeText(fe.resolucion), width)) lines.push(center(l, width));
   }

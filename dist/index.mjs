@@ -409,6 +409,9 @@ function renderFiscal(lines, fe, width, sep2) {
   lines.push(center(sanitizeText(fe.tipo_label || "DOCUMENTO ELECTRONICO"), width));
   lines.push(center(sanitizeText(fe.numero || ""), width));
   if (fe.adquirente) lines.push(center(sanitizeText(fe.adquirente), width));
+  if (fe.fecha_expedicion) {
+    lines.push(center(`Expedicion: ${sanitizeText(fe.fecha_expedicion)}`, width));
+  }
   if (fe.resolucion) {
     for (const l of wrap(sanitizeText(fe.resolucion), width)) lines.push(center(l, width));
   }
