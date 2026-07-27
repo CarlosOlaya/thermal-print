@@ -57,7 +57,12 @@ export function renderFactura(factura: FacturaCerradaPayload, options: ThermalRe
     lines.push(center('** SOLO PARA CONTROL INTERNO **', width));
   }
   lines.push(center('Gracias por su visita!', width));
-  lines.push(footer(width, options.footer));
+  // El pie de marca ("Desarrollado por …") sobra cuando el bloque fiscal ya
+  // declaró el software y su fabricante por exigencia legal (art. 11 num. 18):
+  // sería decir dos veces lo mismo y alargar la tirilla sin aportar nada.
+  if (!factura.fe?.software) {
+    lines.push(footer(width, options.footer));
+  }
 
   return lines.join('\n');
 }
@@ -73,13 +78,46 @@ const TIPO_DOC_SIGLA: Record<string, string> = {
   '41': 'Pasaporte',
 };
 
-function renderCliente(lines: string[], factura: FacturaCerradaPayload): void {
+/** Compara nombres/documentos ignorando tildes, mayúsculas y separadores */
+function normalizar(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * ¿El bloque fiscal ya identifica a este mismo cliente? Entonces no hay que
+ * imprimirlo dos veces. Se compara de verdad (no se asume) porque el cliente
+ * del CRM y el ADQUIRENTE declarado a la DIAN pueden ser distintos: una venta
+ * a Consumidor Final desde el perfil de un cliente de fidelización, por
+ * ejemplo. Cuando difieren, ambos son informativos y ambos se imprimen.
+ */
+function fiscalYaIdentifica(factura: FacturaCerradaPayload): boolean {
+  const adq = factura.fe?.adquirente;
+  if (!adq) return false;
+  const adqNorm = normalizar(adq);
+  if (adqNorm.includes(normalizar('Consumidor Final'))) return false;
   const nombre = factura.cliente;
-  if (nombre && nombre !== 'Consumidor final') lines.push(`Cliente: ${sanitizeText(nombre)}`);
+  const doc = factura.cliente_documento;
+  // Basta con que el bloque fiscal contenga el documento (identificador fuerte)
+  // o, si no hay documento, el nombre completo.
+  if (doc) return adqNorm.includes(normalizar(doc));
+  return !!nombre && adqNorm.includes(normalizar(nombre));
+}
+
+function renderCliente(lines: string[], factura: FacturaCerradaPayload): void {
+  // Con FE, la identificación del adquirente vive en el bloque fiscal (es la
+  // que se le declaró a la DIAN). Repetirla arriba solo alarga la tirilla.
+  const duplicado = fiscalYaIdentifica(factura);
+  const nombre = factura.cliente;
+  if (!duplicado && nombre && nombre !== 'Consumidor final') {
+    lines.push(`Cliente: ${sanitizeText(nombre)}`);
+  }
   // Trazabilidad: el documento identifica al cliente aunque el restaurante no
-  // tenga facturación electrónica (con FE, el bloque fiscal repite al
-  // adquirente DECLARADO — pueden diferir y ambos son informativos).
-  if (factura.cliente_documento) {
+  // tenga facturación electrónica.
+  if (!duplicado && factura.cliente_documento) {
     const sigla = TIPO_DOC_SIGLA[factura.cliente_tipo_documento ?? ''] ?? 'Doc';
     lines.push(`${sigla}: ${sanitizeText(factura.cliente_documento)}`);
   }

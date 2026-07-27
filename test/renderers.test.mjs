@@ -337,6 +337,34 @@ const conCedula = renderFactura({
 }, { now, columns: 32 });
 assert.match(conCedula, /CC: 1020304050/);
 
+// Con FE no se duplica el mismo cliente ni el pie de marca cuando el bloque
+// fiscal ya contiene adquirente e identificacion legal del software.
+const fiscalSinDuplicados = renderFactura({
+  tenant_nombre: 'Restaurante Prueba', numero_factura: 'PED-00071',
+  cliente: 'Carlos Olaya', cliente_documento: '1075317251-8', cliente_tipo_documento: '13',
+  items: [], subtotal: 0, total: 0, metodo_pago: 'efectivo',
+  fe: {
+    ...feTicket,
+    software: 'Software: Foodly - Fabricante: Foodly NIT 1075317251-8',
+  },
+}, { now, columns: 32 });
+assert.doesNotMatch(fiscalSinDuplicados, /Cliente: Carlos Olaya/);
+assert.doesNotMatch(fiscalSinDuplicados, /CC: 1075317251-8/);
+assert.doesNotMatch(fiscalSinDuplicados, /Desarrollado por/);
+
+// El cliente operativo se conserva cuando no coincide con el adquirente DIAN.
+const fiscalClienteDiferente = renderFactura({
+  tenant_nombre: 'Restaurante Prueba', numero_factura: 'PED-00072',
+  cliente: 'Ana Perez', cliente_documento: '1020304050', cliente_tipo_documento: '13',
+  items: [], subtotal: 0, total: 0, metodo_pago: 'efectivo',
+  fe: {
+    ...feTicket,
+    software: 'Software: Foodly - Fabricante: Foodly NIT 1075317251-8',
+  },
+}, { now, columns: 48 });
+assert.match(fiscalClienteDiferente, /Cliente: Ana Perez/);
+assert.match(fiscalClienteDiferente, /CC: 1020304050/);
+
 // Sin documento no se inventa la línea
 const sinDocumento = renderFactura({
   tenant_nombre: 'Restaurante Prueba', numero_factura: 'PED-00070',
@@ -357,6 +385,7 @@ const noFiscal = renderFactura({
   tenant_nombre: 'Restaurante', numero_factura: 'PED-1', items: [], total: 0,
 }, { now, columns: 48 });
 assert.match(noFiscal, /SOLO PARA CONTROL INTERNO/);
+assert.match(noFiscal, /Desarrollado por/);
 assert.doesNotMatch(noFiscal, /CUDE:|CUFE:/);
 
 console.log('OK — tirilla fiscal DIAN (QR + CUFE + impuesto discriminado, 58mm y 80mm)');

@@ -418,7 +418,9 @@ function renderFactura(factura, options = {}) {
     lines.push(center("** SOLO PARA CONTROL INTERNO **", width));
   }
   lines.push(center("Gracias por su visita!", width));
-  lines.push(footer(width, options.footer));
+  if (!factura.fe?.software) {
+    lines.push(footer(width, options.footer));
+  }
   return lines.join("\n");
 }
 var TIPO_DOC_SIGLA = {
@@ -427,10 +429,26 @@ var TIPO_DOC_SIGLA = {
   "22": "CE",
   "41": "Pasaporte"
 };
-function renderCliente(lines, factura) {
+function normalizar(s) {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+function fiscalYaIdentifica(factura) {
+  const adq = factura.fe?.adquirente;
+  if (!adq) return false;
+  const adqNorm = normalizar(adq);
+  if (adqNorm.includes(normalizar("Consumidor Final"))) return false;
   const nombre = factura.cliente;
-  if (nombre && nombre !== "Consumidor final") lines.push(`Cliente: ${sanitizeText(nombre)}`);
-  if (factura.cliente_documento) {
+  const doc = factura.cliente_documento;
+  if (doc) return adqNorm.includes(normalizar(doc));
+  return !!nombre && adqNorm.includes(normalizar(nombre));
+}
+function renderCliente(lines, factura) {
+  const duplicado = fiscalYaIdentifica(factura);
+  const nombre = factura.cliente;
+  if (!duplicado && nombre && nombre !== "Consumidor final") {
+    lines.push(`Cliente: ${sanitizeText(nombre)}`);
+  }
+  if (!duplicado && factura.cliente_documento) {
     const sigla = TIPO_DOC_SIGLA[factura.cliente_tipo_documento ?? ""] ?? "Doc";
     lines.push(`${sigla}: ${sanitizeText(factura.cliente_documento)}`);
   }
