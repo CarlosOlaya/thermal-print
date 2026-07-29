@@ -390,4 +390,29 @@ assert.match(noFiscal, /SOLO PARA CONTROL INTERNO/);
 assert.match(noFiscal, /Desarrollado por/);
 assert.doesNotMatch(noFiscal, /CUDE:|CUFE:/);
 
+// ── Denominación legal larga (art. 19 num. 1 Res. 000165/2023) ─────────────
+// Son 86 caracteres: no cabe ni en 80mm. Debe envolverse por PALABRAS y quedar
+// reconstruible letra por letra — si la impresora la parte a su antojo, el
+// documento queda mal denominado.
+const DENOMINACION_POS =
+  'DOCUMENTO EQUIVALENTE ELECTRONICO TIQUETE DE MAQUINA REGISTRADORA CON SISTEMA P.O.S.';
+for (const w of [32, 48]) {
+  const largo = renderFactura({
+    tenant_nombre: 'Restaurante Prueba', numero_factura: 'PED-00073',
+    items: [], subtotal: 0, total: 0, metodo_pago: 'efectivo',
+    fe: { ...feTicket, tipo_label: DENOMINACION_POS },
+  }, { now, columns: w });
+
+  const lineas = largo.split('\n').map((l) => l.trim());
+  const desde = lineas.findIndex((l) => l.startsWith('DOCUMENTO EQUIVALENTE'));
+  const hasta = lineas.findIndex((l) => l.includes('EPOS855848'));
+  assert.ok(desde >= 0 && hasta > desde, `denominación ausente en ${w} col`);
+  const reconstruida = lineas.slice(desde, hasta).join(' ').replace(/\s+/g, ' ').trim();
+  assert.equal(reconstruida, DENOMINACION_POS, `denominación partida en ${w} col`);
+  for (const l of lineas.slice(desde, hasta)) {
+    assert.ok(l.length <= w, `línea de ${l.length} > ${w} col: "${l}"`);
+  }
+}
+
 console.log('OK — tirilla fiscal DIAN (QR + CUFE + impuesto discriminado, 58mm y 80mm)');
+console.log('OK — denominación legal larga envuelta por palabras (32 y 48 col)');

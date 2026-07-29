@@ -406,7 +406,9 @@ function renderCliente(lines, factura) {
 }
 function renderFiscal(lines, fe, width, sep2) {
   lines.push(sep2);
-  lines.push(center(sanitizeText(fe.tipo_label || "DOCUMENTO ELECTRONICO"), width));
+  for (const l of wrapWords(sanitizeText(fe.tipo_label || "DOCUMENTO ELECTRONICO"), width)) {
+    lines.push(center(l, width));
+  }
   lines.push(center(sanitizeText(fe.numero || ""), width));
   if (fe.adquirente) lines.push(center(sanitizeText(fe.adquirente), width));
   if (fe.fecha_expedicion) {
@@ -434,6 +436,31 @@ function renderFiscal(lines, fe, width, sep2) {
       for (const l of wrap(parte.trim(), width)) lines.push(center(l, width));
     }
   }
+}
+function wrapWords(text2, width) {
+  const clean = String(text2 || "").trim();
+  if (clean.length <= width) return [clean];
+  const out = [];
+  let actual = "";
+  for (const palabra of clean.split(/\s+/)) {
+    if (palabra.length > width) {
+      if (actual) {
+        out.push(actual);
+        actual = "";
+      }
+      out.push(...wrap(palabra, width));
+      continue;
+    }
+    const tentativa = actual ? `${actual} ${palabra}` : palabra;
+    if (tentativa.length > width) {
+      out.push(actual);
+      actual = palabra;
+    } else {
+      actual = tentativa;
+    }
+  }
+  if (actual) out.push(actual);
+  return out;
 }
 function wrap(text2, width) {
   const clean = String(text2 || "");
