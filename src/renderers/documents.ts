@@ -1,5 +1,10 @@
 import { escBold } from '../escpos';
-import type { ThermalDocumentPayload, ThermalRenderOptions, ThermalTomaInventarioPayload } from '../types';
+import type {
+  ThermalDocumentPayload,
+  ThermalRenderOptions,
+  ThermalReservasDiaPayload,
+  ThermalTomaInventarioPayload,
+} from '../types';
 import {
   center,
   clampColumns,
@@ -486,6 +491,120 @@ export function renderTomaInventario(data: ThermalTomaInventarioPayload, options
   lines.push(center('** SOLO PARA CONTROL INTERNO **', ctx.width));
   lines.push(footer(ctx.width, options.footer));
   return lines.join('\n');
+}
+
+/**
+ * Agenda de reservas de un día: la hoja de trabajo con la que el encargado
+ * reubica las mesas. Cada reserva ocupa un bloque con hora, nombre, personas y
+ * ubicación; el motivo y las notas solo salen si existen. Cuando la reserva no
+ * tiene mesa asignada, la ubicación se imprime como una raya en blanco para
+ * anotarla a mano.
+ */
+export function renderReservasDia(data: ThermalReservasDiaPayload, options: ThermalRenderOptions = {}): string {
+  const ctx = context(options);
+  const lines = header(data, 'RESERVAS DEL DIA', ctx);
+  const reservas = arr(data.reservas);
+  const personas = reservas.reduce((sum, reserva) => sum + num(reserva.personas), 0);
+  // Raya para anotar a mano la ubicación de quien aún no tiene mesa asignada.
+  const rayaUbicacion = '_'.repeat(Math.max(10, ctx.width - 15));
+
+  lines.push(escBold(true) + center(fechaAgenda(data, ctx), ctx.width) + escBold(false));
+  lines.push(`Impreso: ${formatDate(ctx.now, ctx.timezone)} ${formatTime(ctx.now, ctx.timezone)}`);
+  if (data.generado_por) lines.push(`Genera:  ${text(data.generado_por)}`);
+  lines.push(ctx.sep2);
+
+  if (!reservas.length) {
+    lines.push('');
+    lines.push(center('Sin reservas para este dia.', ctx.width));
+    lines.push('');
+    lines.push(ctx.sep2);
+    lines.push(footer(ctx.width, options.footer));
+    return lines.join('\n');
+  }
+
+  for (const reserva of reservas) {
+    const hora = hora12(reserva.hora);
+    const pers = `${num(reserva.personas) || 1} pers`;
+    // El nombre se trunca para que hora, nombre y personas quepan en una línea.
+    const nombreMax = Math.max(6, ctx.width - hora.length - pers.length - 2);
+    const nombre = text(reserva.nombre_cliente || reserva.nombre).toUpperCase().substring(0, nombreMax);
+
+    lines.push(escBold(true) + leftRight(`${hora} ${nombre}`, pers, ctx.width) + escBold(false));
+    lines.push(`  Ubicacion: ${text(reserva.ubicacion || reserva.mesa) || rayaUbicacion}`);
+    if (reserva.motivo) pushWrapped(lines, 'Motivo', reserva.motivo, ctx);
+    if (reserva.notas) pushWrapped(lines, 'Notas', reserva.notas, ctx);
+    lines.push(ctx.sep);
+  }
+
+  lines.push(leftRight('Total reservas:', reservas.length, ctx.width));
+  lines.push(leftRight('Total personas:', personas, ctx.width));
+  lines.push(ctx.sep2);
+  lines.push('');
+  for (const linea of wrapWords('Reubique las mesas segun esta agenda.', ctx.width)) {
+    lines.push(center(linea, ctx.width));
+  }
+  lines.push(footer(ctx.width, options.footer));
+  return lines.join('\n');
+}
+
+/** "Motivo: ..." indentado y envuelto por palabras para no perder texto largo. */
+function pushWrapped(lines: string[], label: string, value: unknown, ctx: Ctx): void {
+  // Se envuelve al ancho de la sangría MÁS profunda (la de continuación) para que
+  // ninguna línea se pase del papel y no haya que truncar el texto.
+  const partes = wrapWords(`${label}: ${text(value)}`, ctx.width - 4);
+  lines.push(`  ${partes[0]}`);
+  for (const parte of partes.slice(1)) lines.push(`    ${parte}`);
+}
+
+/** Envuelve por palabras; una palabra más larga que el ancho se corta duro. */
+function wrapWords(value: string, width: number): string[] {
+  const clean = String(value || '').trim();
+  if (clean.length <= width) return [clean];
+  const out: string[] = [];
+  let actual = '';
+  for (const palabra of clean.split(/\s+/)) {
+    const tentativa = actual ? `${actual} ${palabra}` : palabra;
+    if (tentativa.length <= width) {
+      actual = tentativa;
+      continue;
+    }
+    if (actual) out.push(actual);
+    if (palabra.length > width) {
+      for (let i = 0; i < palabra.length; i += width) out.push(palabra.slice(i, i + width));
+      actual = out.pop() || '';
+    } else {
+      actual = palabra;
+    }
+  }
+  if (actual) out.push(actual);
+  return out;
+}
+
+/** 'HH:MM[:SS]' (24h) → ' 7:00 PM' — ancho fijo de 8 para que las horas alineen. */
+function hora12(raw: unknown): string {
+  const [h, m] = String(raw ?? '').split(':');
+  const hora = Number(h);
+  if (!Number.isFinite(hora)) return text(raw).substring(0, 8).padStart(8, ' ');
+  const minutos = String(m ?? '00').padStart(2, '0').substring(0, 2);
+  const sufijo = hora >= 12 ? 'PM' : 'AM';
+  return `${String(hora % 12 || 12).padStart(2, ' ')}:${minutos} ${sufijo}`;
+}
+
+const DIAS_SEMANA = ['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado'];
+const MESES = [
+  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+];
+
+/** Día de la agenda en texto legible; usa `fecha_legible` si la API la mandó. */
+function fechaAgenda(data: ThermalReservasDiaPayload, ctx: Ctx): string {
+  if (data.fecha_legible) return text(data.fecha_legible);
+  const [y, m, d] = String(data.fecha || '').split('-').map(Number);
+  if (!y || !m || !d) return formatDate(ctx.now, ctx.timezone);
+  // Fecha "plana" (sin hora): se construye local para que no la corra la zona horaria.
+  const fecha = new Date(y, m - 1, d);
+  const dia = `${DIAS_SEMANA[fecha.getDay()]} ${d} de ${MESES[m - 1]}`;
+  return ctx.width >= 42 ? `${dia} de ${y}` : dia;
 }
 
 function renderItemTable(lines: string[], items: Row[], ctx: Ctx, nameKey = 'nombre', renderOperationalComments = true): void {

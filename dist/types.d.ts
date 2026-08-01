@@ -161,6 +161,40 @@ export interface ThermalInventarioItem {
     stock?: number;
     existencia?: number;
 }
+/** Una reserva de la agenda del día, tal como se imprime en la tirilla. */
+export interface ThermalReservaItem {
+    /** Hora de llegada, 'HH:MM' o 'HH:MM:SS' (24h) — la tirilla la muestra en 12h */
+    hora?: string;
+    nombre_cliente?: string;
+    nombre?: string;
+    personas?: number;
+    /**
+     * Mesa o zona asignada. Si viene vacía, la tirilla imprime una raya en blanco
+     * para que el encargado anote a mano la ubicación al reubicar las mesas.
+     */
+    ubicacion?: string;
+    mesa?: string;
+    /** Ocasión especial ya en texto legible ("Cumpleaños", "Aniversario", …) */
+    motivo?: string;
+    notas?: string;
+}
+/**
+ * Agenda de reservas de UN día: la hoja que el encargado imprime para que el
+ * personal reubique las mesas. El orden lo define quien arma el payload (la API
+ * la envía por hora ascendente); el renderer no reordena.
+ */
+export interface ThermalReservasDiaPayload extends Record<string, unknown> {
+    tenant_nombre?: string;
+    nit?: string;
+    telefono?: string;
+    direccion?: string;
+    /** Día de la agenda impresa (YYYY-MM-DD) */
+    fecha?: string;
+    /** Etiqueta legible del día; si falta, el renderer la arma desde `fecha` */
+    fecha_legible?: string;
+    generado_por?: string;
+    reservas?: ThermalReservaItem[];
+}
 /**
  * Toma de inventario: tirilla para imprimir el stock actual y que el personal
  * anote el conteo físico, antes de registrar la toma en el sistema.

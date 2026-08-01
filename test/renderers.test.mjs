@@ -6,6 +6,7 @@ import {
   renderFactura,
   renderFacturasTurno,
   renderPrecuenta,
+  renderReservasDia,
   renderTomaInventario,
   renderVentasPLU,
   escBeep,
@@ -259,6 +260,61 @@ assert.match(tomaInventarioCiega, /TOMA DE INVENTARIO/);
 // Modo ciego + una sola fila: el producto sale con las columnas SIST/FISICO en blanco.
 assert.match(tomaInventarioCiega, /Tomate\s+_{4,}/);
 assert.doesNotMatch(tomaInventarioCiega, /3 kg/);
+
+// ── Agenda de reservas del día (hoja para reubicar mesas) ──────────────────
+const reservasPayload = {
+  tenant_nombre: 'Crokanza',
+  fecha: '2026-08-01',
+  generado_por: 'Niria',
+  reservas: [
+    {
+      hora: '19:30:00', nombre_cliente: 'Carlos Olaya', personas: 4,
+      ubicacion: 'Terraza 2', motivo: 'Cumpleaños',
+      notas: 'Traer la torta cuando terminen el plato fuerte, por favor',
+    },
+    { hora: '08:00', nombre_cliente: 'Ana Maria Restrepo Villegas', personas: 2 },
+  ],
+};
+
+for (const w of [32, 48]) {
+  const agenda = renderReservasDia(reservasPayload, { now, columns: w });
+  const lineas = agenda.split('\n');
+
+  assert.match(agenda, /RESERVAS DEL DIA/);
+  assert.match(agenda, /Sabado 1 de agosto/);
+  assert.match(agenda, /CARLOS OLAYA/);
+  assert.match(agenda, / 7:30 PM/, `hora vespertina en 12h (${w} col)`);
+  assert.match(agenda, / 8:00 AM/, `hora matutina en 12h (${w} col)`);
+  assert.match(agenda, /4 pers/);
+  assert.match(agenda, /Ubicacion: Terraza 2/);
+  assert.match(agenda, /Motivo: Cumpleanos/);
+  assert.match(agenda, /Traer la torta/);
+  // Sin mesa asignada ⇒ raya en blanco para anotar la ubicación a mano.
+  assert.match(agenda, /Ubicacion: _{10,}/, `raya de ubicacion ausente (${w} col)`);
+  assert.match(agenda, /Total reservas:\s+2/);
+  assert.match(agenda, /Total personas:\s+6/);
+
+  // El cuerpo de la agenda no se sale del papel: si se saliera, la impresora
+  // partiría las líneas a su antojo y el bloque de cada reserva dejaría de leerse.
+  const cuerpoDesde = lineas.findIndex((l) => l.startsWith('Impreso:'));
+  const cuerpoHasta = lineas.findIndex((l) => l.startsWith('Total personas:'));
+  for (const linea of lineas.slice(cuerpoDesde, cuerpoHasta + 1)) {
+    const limpia = linea.split(escBold(true)).join('').split(escBold(false)).join('');
+    assert.ok(limpia.length <= w, `linea de ${limpia.length} > ${w} col: "${limpia}"`);
+  }
+
+  // Las notas largas se envuelven por palabras: el texto debe quedar completo.
+  const desde = lineas.findIndex((l) => l.includes('Notas:'));
+  const hasta = lineas.findIndex((l, i) => i > desde && l.startsWith('-'));
+  const notas = lineas.slice(desde, hasta).join(' ').replace(/\s+/g, ' ').trim();
+  assert.equal(notas, `Notas: ${reservasPayload.reservas[0].notas}`, `notas partidas en ${w} col`);
+}
+
+const agendaVacia = renderReservasDia({ tenant_nombre: 'Crokanza', fecha: '2026-08-01' }, { now, columns: 32 });
+assert.match(agendaVacia, /Sin reservas para este dia/);
+assert.doesNotMatch(agendaVacia, /Total reservas:/);
+
+console.log('OK — agenda de reservas del dia (32 y 48 col, ubicacion en blanco y notas envueltas)');
 
 // ── Tirilla fiscal (documento electrónico DIAN): número, CUFE/CUDE y QR nativo ──
 const feTicket = {

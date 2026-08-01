@@ -44,6 +44,7 @@ __export(index_exports, {
   renderNotaCredito: () => renderNotaCredito,
   renderPrecuenta: () => renderPrecuenta,
   renderReporteVentas: () => renderReporteVentas,
+  renderReservasDia: () => renderReservasDia,
   renderTomaInventario: () => renderTomaInventario,
   renderVentasPLU: () => renderVentasPLU,
   sanitizeText: () => sanitizeText,
@@ -1055,6 +1056,103 @@ function renderTomaInventario(data, options = {}) {
   lines.push(footer(ctx.width, options.footer));
   return lines.join("\n");
 }
+function renderReservasDia(data, options = {}) {
+  const ctx = context(options);
+  const lines = header(data, "RESERVAS DEL DIA", ctx);
+  const reservas = arr(data.reservas);
+  const personas = reservas.reduce((sum, reserva) => sum + num(reserva.personas), 0);
+  const rayaUbicacion = "_".repeat(Math.max(10, ctx.width - 15));
+  lines.push(escBold(true) + center(fechaAgenda(data, ctx), ctx.width) + escBold(false));
+  lines.push(`Impreso: ${formatDate(ctx.now, ctx.timezone)} ${formatTime(ctx.now, ctx.timezone)}`);
+  if (data.generado_por) lines.push(`Genera:  ${text(data.generado_por)}`);
+  lines.push(ctx.sep2);
+  if (!reservas.length) {
+    lines.push("");
+    lines.push(center("Sin reservas para este dia.", ctx.width));
+    lines.push("");
+    lines.push(ctx.sep2);
+    lines.push(footer(ctx.width, options.footer));
+    return lines.join("\n");
+  }
+  for (const reserva of reservas) {
+    const hora = hora12(reserva.hora);
+    const pers = `${num(reserva.personas) || 1} pers`;
+    const nombreMax = Math.max(6, ctx.width - hora.length - pers.length - 2);
+    const nombre = text(reserva.nombre_cliente || reserva.nombre).toUpperCase().substring(0, nombreMax);
+    lines.push(escBold(true) + leftRight(`${hora} ${nombre}`, pers, ctx.width) + escBold(false));
+    lines.push(`  Ubicacion: ${text(reserva.ubicacion || reserva.mesa) || rayaUbicacion}`);
+    if (reserva.motivo) pushWrapped(lines, "Motivo", reserva.motivo, ctx);
+    if (reserva.notas) pushWrapped(lines, "Notas", reserva.notas, ctx);
+    lines.push(ctx.sep);
+  }
+  lines.push(leftRight("Total reservas:", reservas.length, ctx.width));
+  lines.push(leftRight("Total personas:", personas, ctx.width));
+  lines.push(ctx.sep2);
+  lines.push("");
+  for (const linea of wrapWords2("Reubique las mesas segun esta agenda.", ctx.width)) {
+    lines.push(center(linea, ctx.width));
+  }
+  lines.push(footer(ctx.width, options.footer));
+  return lines.join("\n");
+}
+function pushWrapped(lines, label, value, ctx) {
+  const partes = wrapWords2(`${label}: ${text(value)}`, ctx.width - 4);
+  lines.push(`  ${partes[0]}`);
+  for (const parte of partes.slice(1)) lines.push(`    ${parte}`);
+}
+function wrapWords2(value, width) {
+  const clean = String(value || "").trim();
+  if (clean.length <= width) return [clean];
+  const out = [];
+  let actual = "";
+  for (const palabra of clean.split(/\s+/)) {
+    const tentativa = actual ? `${actual} ${palabra}` : palabra;
+    if (tentativa.length <= width) {
+      actual = tentativa;
+      continue;
+    }
+    if (actual) out.push(actual);
+    if (palabra.length > width) {
+      for (let i = 0; i < palabra.length; i += width) out.push(palabra.slice(i, i + width));
+      actual = out.pop() || "";
+    } else {
+      actual = palabra;
+    }
+  }
+  if (actual) out.push(actual);
+  return out;
+}
+function hora12(raw) {
+  const [h, m] = String(raw ?? "").split(":");
+  const hora = Number(h);
+  if (!Number.isFinite(hora)) return text(raw).substring(0, 8).padStart(8, " ");
+  const minutos = String(m ?? "00").padStart(2, "0").substring(0, 2);
+  const sufijo = hora >= 12 ? "PM" : "AM";
+  return `${String(hora % 12 || 12).padStart(2, " ")}:${minutos} ${sufijo}`;
+}
+var DIAS_SEMANA = ["Domingo", "Lunes", "Martes", "Miercoles", "Jueves", "Viernes", "Sabado"];
+var MESES = [
+  "enero",
+  "febrero",
+  "marzo",
+  "abril",
+  "mayo",
+  "junio",
+  "julio",
+  "agosto",
+  "septiembre",
+  "octubre",
+  "noviembre",
+  "diciembre"
+];
+function fechaAgenda(data, ctx) {
+  if (data.fecha_legible) return text(data.fecha_legible);
+  const [y, m, d] = String(data.fecha || "").split("-").map(Number);
+  if (!y || !m || !d) return formatDate(ctx.now, ctx.timezone);
+  const fecha = new Date(y, m - 1, d);
+  const dia = `${DIAS_SEMANA[fecha.getDay()]} ${d} de ${MESES[m - 1]}`;
+  return ctx.width >= 42 ? `${dia} de ${y}` : dia;
+}
 function renderItemTable(lines, items, ctx, nameKey = "nombre", renderOperationalComments = true) {
   if (!items.length) return;
   lines.push(ctx.width >= 42 ? "CANT  PRODUCTO                V.UNI    TOTAL" : leftRight("CANT PRODUCTO", "TOTAL", ctx.width));
@@ -1325,6 +1423,7 @@ function isRecord(value) {
   renderNotaCredito,
   renderPrecuenta,
   renderReporteVentas,
+  renderReservasDia,
   renderTomaInventario,
   renderVentasPLU,
   sanitizeText,
