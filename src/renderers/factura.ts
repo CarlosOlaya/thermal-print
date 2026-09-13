@@ -31,8 +31,14 @@ export function renderFactura(factura: FacturaCerradaPayload, options: ThermalRe
   if (factura.tenant_nombre) lines.push(center(String(factura.tenant_nombre).toUpperCase(), width));
   if (factura.nit) lines.push(center(`NIT: ${factura.nit}`, width));
   lines.push(sep);
-  lines.push(center(factura.numero_factura || 'PEDIDO', width));
-  lines.push(sep);
+  // `numero_factura` es el consecutivo operativo PED-xxxxx. En una tirilla
+  // fiscal el identificador válido es `fe.numero`, que se imprime en el bloque
+  // DIAN; mostrar ambos confunde el pedido interno con el número autorizado.
+  // Sin FE aceptada se conserva el PED para la trazabilidad de control interno.
+  if (!factura.fe) {
+    lines.push(center(factura.numero_factura || 'PEDIDO', width));
+    lines.push(sep);
+  }
   if (width >= 42) {
     lines.push(`Fecha: ${formatDate(now, timezone)}        Hora: ${formatTime(now, timezone)}`);
   } else {

@@ -397,8 +397,10 @@ function renderFactura(factura, options = {}) {
   if (factura.tenant_nombre) lines.push(center(String(factura.tenant_nombre).toUpperCase(), width));
   if (factura.nit) lines.push(center(`NIT: ${factura.nit}`, width));
   lines.push(sep);
-  lines.push(center(factura.numero_factura || "PEDIDO", width));
-  lines.push(sep);
+  if (!factura.fe) {
+    lines.push(center(factura.numero_factura || "PEDIDO", width));
+    lines.push(sep);
+  }
   if (width >= 42) {
     lines.push(`Fecha: ${formatDate(now, timezone)}        Hora: ${formatTime(now, timezone)}`);
   } else {

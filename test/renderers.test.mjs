@@ -335,7 +335,16 @@ for (const w of [32, 48]) {
     subtotal: 27900, total: 27900, metodo_pago: 'efectivo', fe: feTicket,
   }, { now, columns: w });
   assert.match(fiscal, /DOCUMENTO EQUIVALENTE POS/);
-  assert.match(fiscal, /EPOS855848/);
+  assert.doesNotMatch(
+    fiscal,
+    /^ *PED-00064 *$/m,
+    `referencia interna PED impresa en tirilla fiscal (${w} col)`,
+  );
+  assert.match(
+    fiscal,
+    /^ *EPOS855848 *$/m,
+    `numero DIAN ausente en tirilla fiscal (${w} col)`,
+  );
   assert.match(fiscal, /CUDE:/);
   assert.match(fiscal, /Carlos Olaya - NIT 1075317251-8/);
   assert.match(fiscal, /Expedicion: 16\/07\/2026 11:48/);
@@ -439,12 +448,19 @@ const feSinImpuesto = renderFactura({
 assert.doesNotMatch(feSinImpuesto, /BASE GRAVABLE|IMPOCONSUMO/);
 
 // Sin `fe`: la tirilla sigue siendo de control interno (retrocompatible)
-const noFiscal = renderFactura({
-  tenant_nombre: 'Restaurante', numero_factura: 'PED-1', items: [], total: 0,
-}, { now, columns: 48 });
-assert.match(noFiscal, /SOLO PARA CONTROL INTERNO/);
-assert.match(noFiscal, /Desarrollado por/);
-assert.doesNotMatch(noFiscal, /CUDE:|CUFE:/);
+for (const w of [32, 48]) {
+  const noFiscal = renderFactura({
+    tenant_nombre: 'Restaurante', numero_factura: 'PED-1', items: [], total: 0,
+  }, { now, columns: w });
+  assert.match(
+    noFiscal,
+    /^ *PED-1 *$/m,
+    `identificador operativo ausente sin FE (${w} col)`,
+  );
+  assert.match(noFiscal, /SOLO PARA CONTROL INTERNO/);
+  assert.match(noFiscal, /Desarrollado por/);
+  assert.doesNotMatch(noFiscal, /CUDE:|CUFE:/);
+}
 
 // ── Denominación legal larga (art. 19 num. 1 Res. 000165/2023) ─────────────
 // Son 86 caracteres: no cabe ni en 80mm. Debe envolverse por PALABRAS y quedar
