@@ -55,6 +55,13 @@ export interface ItemEvento {
   es_cortesia?: boolean;
   comentario?: string;
   motivo_descuento?: string;
+  /**
+   * Código del ítem EXACTAMENTE como viajó en el documento electrónico
+   * (art. 11 num. 8: «códigos inequívocos»). La tirilla fiscal lo imprime.
+   */
+  codigo?: string;
+  /** Unidad de medida corta, ej. "UND" (art. 11 num. 8) */
+  unidad?: string;
 }
 
 export interface FacturaCerradaPayload {
@@ -165,6 +172,31 @@ export interface FacturaElectronicaTicket {
     /** Monto del impuesto */
     monto: number;
   };
+  /**
+   * Emisor tal como se declaró a la DIAN (art. 11 num. 2 Res. 000165/2023). El
+   * nombre del restaurante en Foodly suele ser el comercial; la norma pide la
+   * razón social y el NIT, así que con esto la tirilla imprime los dos.
+   */
+  emisor?: {
+    razon_social: string;
+    nombre_comercial?: string;
+    /** NIT con dígito de verificación, ej. "1104869101-4" */
+    nit: string;
+  };
+  /**
+   * Fecha y hora de GENERACIÓN del documento en ISO 8601 (art. 11 num. 5). La
+   * tirilla fiscal la imprime en vez de la hora de impresión: en una
+   * reimpresión esa hora sería la de hoy, no la del documento.
+   */
+  fecha_generacion?: string;
+  /** Forma de pago declarada (art. 11 num. 10), ej. "CONTADO" */
+  forma_pago?: string;
+  /**
+   * Calidades tributarias del emisor que la norma pide «cuando corresponda»
+   * (art. 11 num. 12): gran contribuyente, autorretenedor, agente retenedor de
+   * IVA, régimen SIMPLE. Vacío o ausente = no aplica ninguna.
+   */
+  responsabilidades?: string[];
 }
 
 export type ThermalDocumentPayload = Record<string, unknown>;

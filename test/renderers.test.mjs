@@ -486,6 +486,95 @@ for (const w of [32, 48]) {
   }
 }
 
+// ── Requisitos mínimos de la tirilla fiscal (art. 35 par. 1 Res. 000165/2023) ──
+// Réplica de FELA5 (La Alejandría): el nombre en Foodly es el comercial, la
+// razón social es otra, dos líneas con descuento y una cortesía.
+const feRequisitos = {
+  ...feTicket,
+  tipo_label: 'FACTURA ELECTRONICA DE VENTA',
+  numero: 'FELA5',
+  es_cufe: true,
+  software: 'Proveedor tecnologico: Soluciones Alegra S.A.S - Software: Alegra - NIT 900.559.088-2',
+  emisor: { razon_social: 'SILGADO VILORIA ELKIN DAVID', nit: '1104869101-4' },
+  fecha_generacion: '2026-07-16T16:48:00Z',
+  forma_pago: 'CONTADO',
+  responsabilidades: ['Régimen simple de tributación - SIMPLE'],
+};
+const itemsFela5 = [
+  { cantidad: 6, nombre: 'Colombia 454 Gramos', precio_unitario: 38500, descuento_porcentaje: 14, descuento_monto: 33000, codigo: '124ef936', unidad: 'UND' },
+  { cantidad: 5, nombre: 'Bolsa Para Maquila 500 Gr', precio_unitario: 2000, descuento_porcentaje: 100, descuento_monto: 10000, es_cortesia: true, codigo: '03b9bcc9', unidad: 'UND' },
+  { cantidad: 7, nombre: 'Gesha 250 Gramos', precio_unitario: 45000, descuento_porcentaje: 22, descuento_monto: 70000, codigo: '5b35eb70', unidad: 'UND' },
+];
+const sinNegrilla = (texto) => texto.split(escBold(true)).join('').split(escBold(false)).join('');
+for (const w of [32, 48]) {
+  const t = renderFactura({
+    tenant_nombre: 'Coffee Lab La Alejandría', nit: '1104869101', numero_factura: 'PED-00004',
+    items: itemsFela5, subtotal: 443000, total: 443000,
+    pagos: [{ metodo: 'efectivo', monto: 443000, propina: 0 }], fe: feRequisitos,
+  }, { now, columns: w });
+
+  // Num. 16: con el QR impreso la URL ya no va en texto (vive dentro del QR)
+  assert.doesNotMatch(t, /Verifica en la DIAN/, `URL impresa junto al QR (${w} col)`);
+  // Num. 2: marca comercial + razón social + NIT con DV
+  assert.match(t, /COFFEE LAB LA ALEJANDRIA/, `marca ausente (${w} col)`);
+  assert.match(t, /SILGADO VILORIA ELKIN DAVID/, `razon social ausente (${w} col)`);
+  assert.match(t, /NIT: 1104869101-4/, `NIT con DV ausente (${w} col)`);
+  // Num. 12: calidad tributaria declarada
+  // En 58mm la calidad tributaria ocupa dos renglones: se valida sobre el texto corrido
+  const corrido = t.split('\n').map((l) => l.trim()).join(' ');
+  assert.match(corrido, /Regimen simple de tributacion - SIMPLE/, `regimen SIMPLE ausente (${w} col)`);
+  // Num. 5: fecha de GENERACIÓN, no la de impresión (now = 27/05/2026)
+  assert.match(t, /16\/0?7\/2026/, `fecha de generacion ausente (${w} col)`);
+  assert.doesNotMatch(t, /27\/0?5\/2026/, `imprimio la hora de impresion (${w} col)`);
+  // Num. 8: número de línea, código, unidad y total de líneas
+  assert.match(t, /Cod 124ef936 UND/, `codigo de linea ausente (${w} col)`);
+  assert.match(t, /Cod 03b9bcc9 UND/, `codigo de la cortesia ausente (${w} col)`);
+  assert.match(t, /\*\* CORTESIA \*\*/);
+  assert.match(t, /^Total items: 3$/m, `total de lineas ausente (${w} col)`);
+  assert.match(t, /^ 3 /m, `numero de linea ausente (${w} col)`);
+  // Num. 10: la forma de pago en el título, sin renglón extra
+  assert.match(t, /FORMA DE PAGO: CONTADO/, `forma de pago ausente (${w} col)`);
+
+  // Ninguna línea del encabezado ni del detalle más ancha que el rollo
+  const lineas = sinNegrilla(t).split('\n');
+  const finDetalle = lineas.findIndex((l) => l.startsWith('Total items:'));
+  for (const l of lineas.slice(0, finDetalle + 1)) {
+    assert.ok(l.length <= w, `linea de ${l.length} > ${w} col: "${l}"`);
+  }
+}
+
+// Sin QR la URL sigue saliendo: la tirilla nunca pierde el numeral 16
+const fiscalSinQr = renderFactura({
+  tenant_nombre: 'Restaurante', items: [], total: 0, fe: { ...feRequisitos, qr: undefined },
+}, { now, columns: 32 });
+assert.match(fiscalSinQr, /Verifica en la DIAN:/);
+
+// La marca no se repite cuando ya es la razón social
+const mismoNombre = renderFactura({
+  tenant_nombre: 'VELEZ HOYOS JULIAN DAVID', items: [], total: 0,
+  fe: { ...feRequisitos, emisor: { razon_social: 'Velez Hoyos Julian David', nit: '1100335229-1' } },
+}, { now, columns: 48 });
+assert.equal((mismoNombre.match(/VELEZ HOYOS JULIAN DAVID/g) || []).length, 1);
+
+// Sin documento electrónico la tirilla de control interno no cambia
+const interno = renderFactura({
+  tenant_nombre: 'Restaurante', numero_factura: 'PED-9', items: itemsFela5, total: 443000,
+  pagos: [{ metodo: 'efectivo', monto: 443000, propina: 0 }],
+}, { now, columns: 48 });
+assert.match(interno, /CANT  PRODUCTO/);
+assert.match(interno, /FORMAS DE PAGO/);
+assert.doesNotMatch(interno, /Cod 124ef936|Total items|FORMA DE PAGO:/);
+
+// Entre el QR y el bloque del software queda UN renglón en blanco, no dos
+{
+  const t = renderFactura({ tenant_nombre: 'Restaurante', items: [], total: 0, fe: feRequisitos }, { now, columns: 48 });
+  const lineas = t.split('\n');
+  const finQr = lineas.map((l, i) => (l.includes('\x1E') ? i : -1)).filter((i) => i >= 0).pop();
+  assert.equal(lineas[finQr + 1], '', 'falta el renglon en blanco despues del QR');
+  assert.match(lineas[finQr + 2], /Proveedor tecnologico/, 'doble renglon en blanco entre el QR y el software');
+}
+console.log('OK — requisitos minimos de la tirilla fiscal (num. 2, 5, 8, 10, 12 y 16)');
+
 console.log('OK — tirilla fiscal DIAN (QR + CUFE + impuesto discriminado, 58mm y 80mm)');
 console.log('OK — denominación legal larga envuelta por palabras (32 y 48 col)');
 
