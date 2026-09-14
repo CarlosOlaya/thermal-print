@@ -5,8 +5,9 @@ import type {
   PagoEventoItem,
   ThermalRenderOptions,
 } from '../types';
-import { qrMarker } from '../escpos';
+import { escBold, qrMarker } from '../escpos';
 import {
+  AVANCE_CORTE,
   center,
   clampColumns,
   footer,
@@ -24,54 +25,83 @@ export function renderFactura(factura: FacturaCerradaPayload, options: ThermalRe
   const width = clampColumns(options.columns);
   const now = options.now || new Date();
   const timezone = options.timezone || 'America/Bogota';
-  const sep = '-'.repeat(width);
-  const sep2 = '='.repeat(width);
-  const lines: string[] = [];
 
-  if (factura.tenant_nombre) lines.push(center(String(factura.tenant_nombre).toUpperCase(), width));
-  if (factura.nit) lines.push(center(`NIT: ${factura.nit}`, width));
-  lines.push(sep);
+  const encabezado: string[] = [];
+  if (factura.tenant_nombre) encabezado.push(center(String(factura.tenant_nombre).toUpperCase(), width));
+  if (factura.nit) encabezado.push(center(`NIT: ${factura.nit}`, width));
+
+  const datos: string[] = [];
   // `numero_factura` es el consecutivo operativo PED-xxxxx. En una tirilla
   // fiscal el identificador válido es `fe.numero`, que se imprime en el bloque
   // DIAN; mostrar ambos confunde el pedido interno con el número autorizado.
   // Sin FE aceptada se conserva el PED para la trazabilidad de control interno.
-  if (!factura.fe) {
-    lines.push(center(factura.numero_factura || 'PEDIDO', width));
-    lines.push(sep);
-  }
+  if (!factura.fe) datos.push(center(factura.numero_factura || 'PEDIDO', width));
   if (width >= 42) {
-    lines.push(`Fecha: ${formatDate(now, timezone)}        Hora: ${formatTime(now, timezone)}`);
+    datos.push(`Fecha: ${formatDate(now, timezone)}        Hora: ${formatTime(now, timezone)}`);
   } else {
-    lines.push(`Fecha: ${formatDate(now, timezone)}`);
-    lines.push(`Hora:  ${formatTime(now, timezone)}`);
+    datos.push(`Fecha: ${formatDate(now, timezone)}`);
+    datos.push(`Hora:  ${formatTime(now, timezone)}`);
   }
-  lines.push(sanitizeText(factura.mesa_nombre || `Mesa: ${factura.mesa_numero || ''}`));
-  lines.push(`Mesero: ${sanitizeText(factura.mesero || '')}`);
-  renderCliente(lines, factura);
-  lines.push(sep);
+  datos.push(sanitizeText(factura.mesa_nombre || `Mesa: ${factura.mesa_numero || ''}`));
+  datos.push(`Mesero: ${sanitizeText(factura.mesero || '')}`);
+  renderCliente(datos, factura);
 
-  renderItems(lines, factura.items || [], width, sep);
-  renderTotals(lines, factura, width, sep2);
-  renderPayments(lines, factura, width, sep);
-  renderCambio(lines, factura, width, sep);
+  const detalle: string[] = [];
+  renderItems(detalle, factura.items || [], width);
+
+  const totales: string[] = [];
+  renderTotals(totales, factura, width);
+
+  const pagos: string[] = [];
+  renderPayments(pagos, factura, width);
+  renderCambio(pagos, factura, width);
+
+  // Una sola raya ENTRE secciones, y solo entre las que tienen contenido. Antes
+  // cada bloque abría y cerraba la suya: la tirilla acumulaba rayas pegadas
+  // (---- seguida de ====) que gastaban papel sin separar nada nuevo.
+  const sep = '-'.repeat(width);
+  const lines = unirSecciones([encabezado, datos, detalle, totales, pagos], sep);
 
   // Con documento electrónico ACEPTADO la tirilla es fiscal (número DIAN +
-  // CUFE/CUDE + QR); sin él, sigue siendo control interno.
+  // CUFE/CUDE + QR); sin él, sigue siendo control interno. La doble raya queda
+  // solo para abrir el bloque fiscal: marca dónde empieza lo declarado a la DIAN.
   if (factura.fe) {
-    renderFiscal(lines, factura.fe, width, sep2);
+    lines.push('='.repeat(width));
+    renderFiscal(lines, factura.fe, width);
   } else {
-    lines.push('');
+    lines.push(sep);
     lines.push(center('** SOLO PARA CONTROL INTERNO **', width));
   }
   lines.push(center('Gracias por su visita!', width));
   // El pie de marca ("Desarrollado por …") sobra cuando el bloque fiscal ya
   // declaró el software y su fabricante por exigencia legal (art. 11 num. 18):
-  // sería decir dos veces lo mismo y alargar la tirilla sin aportar nada.
-  if (!factura.fe?.software) {
+  // sería decir dos veces lo mismo. Lo que NO sobra es el avance de papel que
+  // traía ese pie: sin él la cuchilla cortaba sobre las últimas líneas del
+  // bloque fiscal, y el software, su NIT y el agradecimiento salían pegados al
+  // comienzo de la tirilla siguiente.
+  if (factura.fe?.software) {
+    lines.push(...AVANCE_CORTE);
+  } else {
     lines.push(footer(width, options.footer));
   }
 
   return lines.join('\n');
+}
+
+/** Une las secciones con UNA raya entre cada par que tenga contenido. */
+function unirSecciones(secciones: string[][], sep: string): string[] {
+  const lines: string[] = [];
+  for (const seccion of secciones) {
+    if (seccion.length === 0) continue;
+    if (lines.length > 0) lines.push(sep);
+    lines.push(...seccion);
+  }
+  return lines;
+}
+
+/** Destaca una línea sin gastar papel en rayas alrededor. */
+function negrilla(linea: string): string {
+  return escBold(true) + linea + escBold(false);
 }
 
 // Datos del cliente y localizador — todos opcionales: cada línea solo se imprime
@@ -89,7 +119,7 @@ const TIPO_DOC_SIGLA: Record<string, string> = {
 function normalizar(s: string): string {
   return s
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '');
 }
@@ -136,14 +166,9 @@ function renderCliente(lines: string[], factura: FacturaCerradaPayload): void {
 
 // Bloque fiscal DIAN: tipo + número, adquirente, CUFE/CUDE (envuelto al ancho),
 // resolución, QR nativo y URL de verificación. Funciona en 58mm y 80mm porque
-// todo se centra/envuelve al `width` real.
-function renderFiscal(
-  lines: string[],
-  fe: FacturaElectronicaTicket,
-  width: number,
-  sep2: string,
-): void {
-  lines.push(sep2);
+// todo se centra/envuelve al `width` real. La doble raya que lo abre la pone
+// `renderFactura`.
+function renderFiscal(lines: string[], fe: FacturaElectronicaTicket, width: number): void {
   // La denominación legal del documento equivalente P.O.S. (art. 19 num. 1 de
   // la Res. 000165/2023) son 86 caracteres: no cabe ni en 80mm. Se envuelve por
   // PALABRAS — `center` con una línea más larga que el ancho la devuelve cruda y
@@ -152,14 +177,18 @@ function renderFiscal(
     lines.push(center(l, width));
   }
   lines.push(center(sanitizeText(fe.numero || ''), width));
-  if (fe.adquirente) lines.push(center(sanitizeText(fe.adquirente), width));
+  // Adquirente y resolución se envuelven por PALABRAS: cortando por carácter,
+  // en 58mm el rango autorizado salía "DJFE 1-5000 / 000", que parece otro número.
+  if (fe.adquirente) {
+    for (const l of wrapWords(sanitizeText(fe.adquirente), width)) lines.push(center(l, width));
+  }
   // Art. 11 num. 6: la fecha de EXPEDICIÓN (validación DIAN) es distinta de la
   // de generación que ya va arriba de la tirilla.
   if (fe.fecha_expedicion) {
     lines.push(center(`Expedicion: ${sanitizeText(fe.fecha_expedicion)}`, width));
   }
   if (fe.resolucion) {
-    for (const l of wrap(sanitizeText(fe.resolucion), width)) lines.push(center(l, width));
+    for (const l of wrapWords(sanitizeText(fe.resolucion), width)) lines.push(center(l, width));
   }
   if (fe.cufe) {
     lines.push(center(fe.es_cufe === false ? 'CUDE:' : 'CUFE:', width));
@@ -177,12 +206,13 @@ function renderFiscal(
   }
   // Art. 11 num. 18 Res. 000042/2020 — va de último, después del QR, para no
   // desplazar los datos que el cliente busca primero (número, CUFE, QR).
-  // Se parte por segmento (" - ") antes de envolver: `wrap` corta por carácter
-  // y en 58mm dejaría los NIT partidos a la mitad, ilegibles en un bloque legal.
+  // Se parte por segmento (" - ") y luego por PALABRAS: cortando por carácter,
+  // en 58mm salía "Solucione / s Alegra" y los NIT partidos a la mitad,
+  // ilegibles en un bloque legal.
   if (fe.software) {
     lines.push('');
     for (const parte of sanitizeText(fe.software).split(' - ')) {
-      for (const l of wrap(parte.trim(), width)) lines.push(center(l, width));
+      for (const l of wrapWords(parte.trim(), width)) lines.push(center(l, width));
     }
   }
 }
@@ -223,12 +253,12 @@ function wrap(text: string, width: number): string[] {
   return out;
 }
 
-function renderItems(lines: string[], items: ItemEvento[], width: number, sep: string): void {
+function renderItems(lines: string[], items: ItemEvento[], width: number): void {
   if (!items.length) return;
 
+  // Sin raya bajo los títulos: van en mayúsculas y ya se distinguen de las filas.
   if (width >= 42) lines.push('CANT  PRODUCTO                V.UNI    TOTAL');
   else lines.push(leftRight('CANT PRODUCTO', 'TOTAL', width));
-  lines.push(sep);
 
   for (const item of items) {
     if (width >= 42) {
@@ -237,8 +267,6 @@ function renderItems(lines: string[], items: ItemEvento[], width: number, sep: s
       renderNarrowItem(lines, item, width);
     }
   }
-
-  lines.push(sep);
 }
 
 function renderWideItem(lines: string[], item: ItemEvento): void {
@@ -282,11 +310,23 @@ function renderNarrowItem(lines: string[], item: ItemEvento, width: number): voi
   renderReason(lines, item.motivo_descuento || (item.es_cortesia ? item.comentario : undefined));
 }
 
-function renderTotals(lines: string[], factura: FacturaCerradaPayload, width: number, sep2: string): void {
-  const subtotalVisible = Number(factura.subtotal) + Number(factura.descuento_monto || 0);
+function renderTotals(lines: string[], factura: FacturaCerradaPayload, width: number): void {
   const descMesa = Number(factura.descuento_monto) || 0;
+  const subtotalVisible = (Number(factura.subtotal) || 0) + descMesa;
+  const iva = Number(factura.monto_iva) || 0;
+  const servicio = Number(factura.propina) || 0;
+  const total = Number(factura.total) || 0;
+  // Impuesto INCLUIDO en el precio (norma CO): NO se suma al total, se separa.
+  // Debe decir lo mismo que se le declaró a la DIAN, o la tirilla contradice al
+  // documento que representa.
+  const imp = factura.fe?.impuesto;
+  const conImpuesto = Boolean(imp && imp.monto > 0);
 
-  lines.push(leftRight('SUBTOTAL:', `$${formatMoney(subtotalVisible)}`, width));
+  // Sin nada entre el subtotal y el total, las dos líneas dirían el mismo
+  // número: con el total basta.
+  if (descMesa > 0 || iva > 0 || conImpuesto || servicio > 0 || subtotalVisible !== total) {
+    lines.push(leftRight('SUBTOTAL:', `$${formatMoney(subtotalVisible)}`, width));
+  }
   if (descMesa > 0) {
     lines.push(leftRight('DESC. MESA:', `-$${formatMoney(descMesa)}`, width));
     const reason = factura.motivo_descuento
@@ -296,62 +336,58 @@ function renderTotals(lines: string[], factura: FacturaCerradaPayload, width: nu
     renderReason(lines, reason, '  Motivo: ');
     lines.push(leftRight('NETO:', `$${formatMoney(factura.subtotal)}`, width));
   }
-  if (Number(factura.monto_iva) > 0) lines.push(leftRight('IVA:', `$${formatMoney(factura.monto_iva)}`, width));
-  // Impuesto INCLUIDO en el precio (norma CO): NO se suma al total, se separa.
-  // Debe decir lo mismo que se le declaró a la DIAN, o la tirilla contradice al
-  // documento que representa.
-  const imp = factura.fe?.impuesto;
+  if (iva > 0) lines.push(leftRight('IVA:', `$${formatMoney(iva)}`, width));
   if (imp && imp.monto > 0) {
     lines.push(leftRight('BASE GRAVABLE:', `$${formatMoney(imp.base)}`, width));
     lines.push(leftRight(`${imp.label} ${imp.tarifa}%:`, `$${formatMoney(imp.monto)}`, width));
   }
-  if (Number(factura.propina) > 0) lines.push(leftRight('SERVICIO:', `$${formatMoney(factura.propina)}`, width));
-  lines.push(sep2);
-  lines.push(leftRight('TOTAL PEDIDO:', `$ ${formatMoney(factura.total)}`, width));
+  if (servicio > 0) lines.push(leftRight('SERVICIO:', `$${formatMoney(servicio)}`, width));
 
+  // El total va en negrilla en vez de encerrado entre dobles rayas. Con
+  // domicilio se destaca lo que paga el cliente: TOTAL A PAGAR.
+  const totalPedido = leftRight('TOTAL PEDIDO:', `$ ${formatMoney(total)}`, width);
   const deliveryAmount = Number(factura.recaudo_domicilio_monto) || 0;
   if (deliveryAmount > 0) {
+    const totalCliente = Number(factura.total_cliente) || (total + deliveryAmount);
+    lines.push(totalPedido);
     lines.push(leftRight('DOMICILIO:', `$${formatMoney(deliveryAmount)}`, width));
-    lines.push(sep2);
-    lines.push(leftRight('TOTAL A PAGAR:', `$ ${formatMoney(Number(factura.total_cliente) || (Number(factura.total) + deliveryAmount))}`, width));
+    lines.push(negrilla(leftRight('TOTAL A PAGAR:', `$ ${formatMoney(totalCliente)}`, width)));
+  } else {
+    lines.push(negrilla(totalPedido));
   }
-  lines.push(sep2);
 }
 
-function renderPayments(lines: string[], factura: FacturaCerradaPayload, width: number, sep: string): void {
+function renderPayments(lines: string[], factura: FacturaCerradaPayload, width: number): void {
   const payments = factura.pagos || [];
   if (payments.length > 1) {
     lines.push(center('FORMAS DE PAGO (DIVIDIDO)', width));
-    lines.push(sep);
-    for (const payment of payments) renderPayment(lines, payment, width, true, sep);
+    for (const payment of payments) renderPayment(lines, payment, width, true);
     const totalCobrado = payments.reduce((sum, payment) => sum + Number(payment.monto || 0) + Number(payment.propina || 0), 0);
     lines.push(leftRight('TOTAL COBRADO:', `$${formatMoney(totalCobrado)}`, width));
   } else if (payments.length === 1) {
     lines.push(center('FORMAS DE PAGO', width));
-    lines.push(sep);
-    renderPayment(lines, payments[0], width, false, sep);
+    renderPayment(lines, payments[0], width, false);
   } else if (factura.metodo_pago) {
     lines.push(center('FORMAS DE PAGO', width));
-    lines.push(sep);
     lines.push(leftRight(`${labelMetodo(factura.metodo_pago)}:`, `$${formatMoney(factura.total)}`, width));
   }
-  lines.push(sep);
 }
 
-function renderPayment(lines: string[], payment: PagoEventoItem, width: number, detailed: boolean, sep: string): void {
+function renderPayment(lines: string[], payment: PagoEventoItem, width: number, detailed: boolean): void {
   const method = labelMetodo(payment.metodo || payment.metodo_pago);
   const amount = Number(payment.monto) || 0;
   const tip = Number(payment.propina) || 0;
-  if (detailed) {
+  // En el pago dividido el desglose solo aporta cuando el método lleva servicio:
+  // sin él, subtotal y total del método son el mismo número y basta una línea.
+  if (detailed && tip > 0) {
     lines.push(`${method}:`);
     lines.push(leftRight('  Subtotal:', `$${formatMoney(amount)}`, width));
-    if (tip > 0) lines.push(leftRight('  + Servicio:', `$${formatMoney(tip)}`, width));
+    lines.push(leftRight('  + Servicio:', `$${formatMoney(tip)}`, width));
     lines.push(leftRight('  Total metodo:', `$${formatMoney(amount + tip)}`, width));
-    lines.push(sep);
     return;
   }
 
-  lines.push(leftRight(`${method.padEnd(14, ' ')}:`, `$${formatMoney(amount)}`, width));
+  lines.push(leftRight(`${method}:`, `$${formatMoney(amount)}`, width));
   if (tip > 0) lines.push(leftRight('  + Servicio:', `$${formatMoney(tip)}`, width));
 }
 
@@ -361,14 +397,13 @@ function renderPayment(lines: string[], payment: PagoEventoItem, width: number, 
  * que aquí no se recalcula nada; un dato incompleto o incoherente no se imprime,
  * porque en papel le prometería al comensal un cambio que no es.
  */
-function renderCambio(lines: string[], factura: FacturaCerradaPayload, width: number, sep: string): void {
+function renderCambio(lines: string[], factura: FacturaCerradaPayload, width: number): void {
   const recibido = factura.efectivo_recibido;
   const cambio = factura.cambio;
   if (typeof recibido !== 'number' || typeof cambio !== 'number') return;
   if (!(recibido > 0) || !(cambio >= 0) || cambio > recibido) return;
   lines.push(leftRight('EFECTIVO RECIBIDO:', `$${formatMoney(recibido)}`, width));
   lines.push(leftRight('CAMBIO:', `$${formatMoney(cambio)}`, width));
-  lines.push(sep);
 }
 
 function renderReason(lines: string[], reason: unknown, prefix = '      Motivo: '): void {

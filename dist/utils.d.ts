@@ -12,5 +12,12 @@ export declare function rightPadMoney(value: unknown, width: number): string;
 export declare function formatMoney(value: unknown): string;
 export declare function formatDate(date: Date, timezone?: string): string;
 export declare function formatTime(date: Date, timezone?: string): string;
+/**
+ * Líneas en blanco con que termina toda tirilla. La cuchilla queda unas cuatro
+ * líneas por encima del cabezal y el print-server corta apenas llega el último
+ * byte: sin este avance, el corte cae sobre lo último impreso y ese texto sale
+ * pegado al comienzo de la tirilla siguiente.
+ */
+export declare const AVANCE_CORTE: readonly string[];
 export declare function footer(width?: number, text?: string): string;
 export declare function clampColumns(columns?: number): number;

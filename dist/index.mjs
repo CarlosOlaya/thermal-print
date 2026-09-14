@@ -2,6 +2,8 @@
 var METODO_LABELS = {
   efectivo: "Efectivo",
   tarjeta: "Tarjeta",
+  tarjeta_debito: "Tarjeta debito",
+  tarjeta_credito: "Tarjeta credito",
   datafono: "Tarjeta",
   transferencia: "Transferencia",
   nequi: "Nequi",
@@ -14,14 +16,14 @@ var METODO_LABELS = {
   mixto: "Mixto"
 };
 function sanitizeText(value) {
-  return String(value ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\x20-\x7E\n\r\x1B\x1D]/g, "");
+  return String(value ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^\x20-\x7E\n\r\x1B\x1D]/g, "");
 }
 function labelMetodo(raw) {
   const key = sanitizeText(raw || "efectivo").toLowerCase().trim();
   if (key.includes("+")) {
     return key.split("+").map((part) => labelMetodo(part.trim())).join(" + ");
   }
-  return METODO_LABELS[key] || capitalize(key) || "Efectivo";
+  return METODO_LABELS[key] || capitalize(key.replace(/_+/g, " ")) || "Efectivo";
 }
 function center(text2, width = 48) {
   const safe = sanitizeText(text2);
@@ -71,8 +73,10 @@ function formatTime(date, timezone = "America/Bogota") {
     return `${hours}:${minutes} ${ampm}`;
   }
 }
+var AVANCE_CORTE = ["", "", "", "", ""];
 function footer(width = 48, text2 = "Desarrollado por www.foodly.com.co") {
-  return ["", center(text2, width), "", "", "", "", ""].join("\n");
+  const marca = text2.length > width ? text2.replace(/www\./i, "") : text2;
+  return ["", center(marca, width), ...AVANCE_CORTE].join("\n");
 }
 function clampColumns(columns) {
   const numeric = Number(columns);
@@ -337,41 +341,55 @@ function renderFactura(factura, options = {}) {
   const width = clampColumns(options.columns);
   const now = options.now || /* @__PURE__ */ new Date();
   const timezone = options.timezone || "America/Bogota";
-  const sep = "-".repeat(width);
-  const sep2 = "=".repeat(width);
-  const lines = [];
-  if (factura.tenant_nombre) lines.push(center(String(factura.tenant_nombre).toUpperCase(), width));
-  if (factura.nit) lines.push(center(`NIT: ${factura.nit}`, width));
-  lines.push(sep);
-  if (!factura.fe) {
-    lines.push(center(factura.numero_factura || "PEDIDO", width));
-    lines.push(sep);
-  }
+  const encabezado = [];
+  if (factura.tenant_nombre) encabezado.push(center(String(factura.tenant_nombre).toUpperCase(), width));
+  if (factura.nit) encabezado.push(center(`NIT: ${factura.nit}`, width));
+  const datos = [];
+  if (!factura.fe) datos.push(center(factura.numero_factura || "PEDIDO", width));
   if (width >= 42) {
-    lines.push(`Fecha: ${formatDate(now, timezone)}        Hora: ${formatTime(now, timezone)}`);
+    datos.push(`Fecha: ${formatDate(now, timezone)}        Hora: ${formatTime(now, timezone)}`);
   } else {
-    lines.push(`Fecha: ${formatDate(now, timezone)}`);
-    lines.push(`Hora:  ${formatTime(now, timezone)}`);
+    datos.push(`Fecha: ${formatDate(now, timezone)}`);
+    datos.push(`Hora:  ${formatTime(now, timezone)}`);
   }
-  lines.push(sanitizeText(factura.mesa_nombre || `Mesa: ${factura.mesa_numero || ""}`));
-  lines.push(`Mesero: ${sanitizeText(factura.mesero || "")}`);
-  renderCliente(lines, factura);
-  lines.push(sep);
-  renderItems(lines, factura.items || [], width, sep);
-  renderTotals(lines, factura, width, sep2);
-  renderPayments(lines, factura, width, sep);
-  renderCambio(lines, factura, width, sep);
+  datos.push(sanitizeText(factura.mesa_nombre || `Mesa: ${factura.mesa_numero || ""}`));
+  datos.push(`Mesero: ${sanitizeText(factura.mesero || "")}`);
+  renderCliente(datos, factura);
+  const detalle = [];
+  renderItems(detalle, factura.items || [], width);
+  const totales = [];
+  renderTotals(totales, factura, width);
+  const pagos = [];
+  renderPayments(pagos, factura, width);
+  renderCambio(pagos, factura, width);
+  const sep = "-".repeat(width);
+  const lines = unirSecciones([encabezado, datos, detalle, totales, pagos], sep);
   if (factura.fe) {
-    renderFiscal(lines, factura.fe, width, sep2);
+    lines.push("=".repeat(width));
+    renderFiscal(lines, factura.fe, width);
   } else {
-    lines.push("");
+    lines.push(sep);
     lines.push(center("** SOLO PARA CONTROL INTERNO **", width));
   }
   lines.push(center("Gracias por su visita!", width));
-  if (!factura.fe?.software) {
+  if (factura.fe?.software) {
+    lines.push(...AVANCE_CORTE);
+  } else {
     lines.push(footer(width, options.footer));
   }
   return lines.join("\n");
+}
+function unirSecciones(secciones, sep) {
+  const lines = [];
+  for (const seccion of secciones) {
+    if (seccion.length === 0) continue;
+    if (lines.length > 0) lines.push(sep);
+    lines.push(...seccion);
+  }
+  return lines;
+}
+function negrilla(linea) {
+  return escBold(true) + linea + escBold(false);
 }
 var TIPO_DOC_SIGLA = {
   "13": "CC",
@@ -380,7 +398,7 @@ var TIPO_DOC_SIGLA = {
   "41": "Pasaporte"
 };
 function normalizar(s) {
-  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 function fiscalYaIdentifica(factura) {
   const adq = factura.fe?.adquirente;
@@ -407,18 +425,19 @@ function renderCliente(lines, factura) {
   if (factura.cliente_barrio) lines.push(`Barrio: ${sanitizeText(factura.cliente_barrio)}`);
   if (factura.localizador) lines.push(`Localizador: ${sanitizeText(factura.localizador)}`);
 }
-function renderFiscal(lines, fe, width, sep2) {
-  lines.push(sep2);
+function renderFiscal(lines, fe, width) {
   for (const l of wrapWords(sanitizeText(fe.tipo_label || "DOCUMENTO ELECTRONICO"), width)) {
     lines.push(center(l, width));
   }
   lines.push(center(sanitizeText(fe.numero || ""), width));
-  if (fe.adquirente) lines.push(center(sanitizeText(fe.adquirente), width));
+  if (fe.adquirente) {
+    for (const l of wrapWords(sanitizeText(fe.adquirente), width)) lines.push(center(l, width));
+  }
   if (fe.fecha_expedicion) {
     lines.push(center(`Expedicion: ${sanitizeText(fe.fecha_expedicion)}`, width));
   }
   if (fe.resolucion) {
-    for (const l of wrap(sanitizeText(fe.resolucion), width)) lines.push(center(l, width));
+    for (const l of wrapWords(sanitizeText(fe.resolucion), width)) lines.push(center(l, width));
   }
   if (fe.cufe) {
     lines.push(center(fe.es_cufe === false ? "CUDE:" : "CUFE:", width));
@@ -436,7 +455,7 @@ function renderFiscal(lines, fe, width, sep2) {
   if (fe.software) {
     lines.push("");
     for (const parte of sanitizeText(fe.software).split(" - ")) {
-      for (const l of wrap(parte.trim(), width)) lines.push(center(l, width));
+      for (const l of wrapWords(parte.trim(), width)) lines.push(center(l, width));
     }
   }
 }
@@ -472,11 +491,10 @@ function wrap(text2, width) {
   for (let i = 0; i < clean.length; i += width) out.push(clean.slice(i, i + width));
   return out;
 }
-function renderItems(lines, items, width, sep) {
+function renderItems(lines, items, width) {
   if (!items.length) return;
   if (width >= 42) lines.push("CANT  PRODUCTO                V.UNI    TOTAL");
   else lines.push(leftRight("CANT PRODUCTO", "TOTAL", width));
-  lines.push(sep);
   for (const item of items) {
     if (width >= 42) {
       renderWideItem(lines, item);
@@ -484,7 +502,6 @@ function renderItems(lines, items, width, sep) {
       renderNarrowItem(lines, item, width);
     }
   }
-  lines.push(sep);
 }
 function renderWideItem(lines, item) {
   const qty = String(item.cantidad || 1).padStart(3, " ");
@@ -520,75 +537,76 @@ function renderNarrowItem(lines, item, width) {
   if (descAmount > 0) lines.push(`   Dcto (-$${formatMoney(descAmount)})`);
   renderReason(lines, item.motivo_descuento || (item.es_cortesia ? item.comentario : void 0));
 }
-function renderTotals(lines, factura, width, sep2) {
-  const subtotalVisible = Number(factura.subtotal) + Number(factura.descuento_monto || 0);
+function renderTotals(lines, factura, width) {
   const descMesa = Number(factura.descuento_monto) || 0;
-  lines.push(leftRight("SUBTOTAL:", `$${formatMoney(subtotalVisible)}`, width));
+  const subtotalVisible = (Number(factura.subtotal) || 0) + descMesa;
+  const iva = Number(factura.monto_iva) || 0;
+  const servicio = Number(factura.propina) || 0;
+  const total = Number(factura.total) || 0;
+  const imp = factura.fe?.impuesto;
+  const conImpuesto = Boolean(imp && imp.monto > 0);
+  if (descMesa > 0 || iva > 0 || conImpuesto || servicio > 0 || subtotalVisible !== total) {
+    lines.push(leftRight("SUBTOTAL:", `$${formatMoney(subtotalVisible)}`, width));
+  }
   if (descMesa > 0) {
     lines.push(leftRight("DESC. MESA:", `-$${formatMoney(descMesa)}`, width));
     const reason = factura.motivo_descuento || factura.motivo_descuento_mesa || factura.justificacion_descuento || factura.descuento_motivo;
     renderReason(lines, reason, "  Motivo: ");
     lines.push(leftRight("NETO:", `$${formatMoney(factura.subtotal)}`, width));
   }
-  if (Number(factura.monto_iva) > 0) lines.push(leftRight("IVA:", `$${formatMoney(factura.monto_iva)}`, width));
-  const imp = factura.fe?.impuesto;
+  if (iva > 0) lines.push(leftRight("IVA:", `$${formatMoney(iva)}`, width));
   if (imp && imp.monto > 0) {
     lines.push(leftRight("BASE GRAVABLE:", `$${formatMoney(imp.base)}`, width));
     lines.push(leftRight(`${imp.label} ${imp.tarifa}%:`, `$${formatMoney(imp.monto)}`, width));
   }
-  if (Number(factura.propina) > 0) lines.push(leftRight("SERVICIO:", `$${formatMoney(factura.propina)}`, width));
-  lines.push(sep2);
-  lines.push(leftRight("TOTAL PEDIDO:", `$ ${formatMoney(factura.total)}`, width));
+  if (servicio > 0) lines.push(leftRight("SERVICIO:", `$${formatMoney(servicio)}`, width));
+  const totalPedido = leftRight("TOTAL PEDIDO:", `$ ${formatMoney(total)}`, width);
   const deliveryAmount = Number(factura.recaudo_domicilio_monto) || 0;
   if (deliveryAmount > 0) {
+    const totalCliente = Number(factura.total_cliente) || total + deliveryAmount;
+    lines.push(totalPedido);
     lines.push(leftRight("DOMICILIO:", `$${formatMoney(deliveryAmount)}`, width));
-    lines.push(sep2);
-    lines.push(leftRight("TOTAL A PAGAR:", `$ ${formatMoney(Number(factura.total_cliente) || Number(factura.total) + deliveryAmount)}`, width));
+    lines.push(negrilla(leftRight("TOTAL A PAGAR:", `$ ${formatMoney(totalCliente)}`, width)));
+  } else {
+    lines.push(negrilla(totalPedido));
   }
-  lines.push(sep2);
 }
-function renderPayments(lines, factura, width, sep) {
+function renderPayments(lines, factura, width) {
   const payments = factura.pagos || [];
   if (payments.length > 1) {
     lines.push(center("FORMAS DE PAGO (DIVIDIDO)", width));
-    lines.push(sep);
-    for (const payment of payments) renderPayment(lines, payment, width, true, sep);
+    for (const payment of payments) renderPayment(lines, payment, width, true);
     const totalCobrado = payments.reduce((sum, payment) => sum + Number(payment.monto || 0) + Number(payment.propina || 0), 0);
     lines.push(leftRight("TOTAL COBRADO:", `$${formatMoney(totalCobrado)}`, width));
   } else if (payments.length === 1) {
     lines.push(center("FORMAS DE PAGO", width));
-    lines.push(sep);
-    renderPayment(lines, payments[0], width, false, sep);
+    renderPayment(lines, payments[0], width, false);
   } else if (factura.metodo_pago) {
     lines.push(center("FORMAS DE PAGO", width));
-    lines.push(sep);
     lines.push(leftRight(`${labelMetodo(factura.metodo_pago)}:`, `$${formatMoney(factura.total)}`, width));
   }
-  lines.push(sep);
 }
-function renderPayment(lines, payment, width, detailed, sep) {
+function renderPayment(lines, payment, width, detailed) {
   const method = labelMetodo(payment.metodo || payment.metodo_pago);
   const amount = Number(payment.monto) || 0;
   const tip = Number(payment.propina) || 0;
-  if (detailed) {
+  if (detailed && tip > 0) {
     lines.push(`${method}:`);
     lines.push(leftRight("  Subtotal:", `$${formatMoney(amount)}`, width));
-    if (tip > 0) lines.push(leftRight("  + Servicio:", `$${formatMoney(tip)}`, width));
+    lines.push(leftRight("  + Servicio:", `$${formatMoney(tip)}`, width));
     lines.push(leftRight("  Total metodo:", `$${formatMoney(amount + tip)}`, width));
-    lines.push(sep);
     return;
   }
-  lines.push(leftRight(`${method.padEnd(14, " ")}:`, `$${formatMoney(amount)}`, width));
+  lines.push(leftRight(`${method}:`, `$${formatMoney(amount)}`, width));
   if (tip > 0) lines.push(leftRight("  + Servicio:", `$${formatMoney(tip)}`, width));
 }
-function renderCambio(lines, factura, width, sep) {
+function renderCambio(lines, factura, width) {
   const recibido = factura.efectivo_recibido;
   const cambio = factura.cambio;
   if (typeof recibido !== "number" || typeof cambio !== "number") return;
   if (!(recibido > 0) || !(cambio >= 0) || cambio > recibido) return;
   lines.push(leftRight("EFECTIVO RECIBIDO:", `$${formatMoney(recibido)}`, width));
   lines.push(leftRight("CAMBIO:", `$${formatMoney(cambio)}`, width));
-  lines.push(sep);
 }
 function renderReason(lines, reason, prefix = "      Motivo: ") {
   if (reason) lines.push(`${prefix}${sanitizeText(reason)}`);

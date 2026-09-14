@@ -1,6 +1,8 @@
 const METODO_LABELS: Record<string, string> = {
   efectivo: 'Efectivo',
   tarjeta: 'Tarjeta',
+  tarjeta_debito: 'Tarjeta debito',
+  tarjeta_credito: 'Tarjeta credito',
   datafono: 'Tarjeta',
   transferencia: 'Transferencia',
   nequi: 'Nequi',
@@ -16,7 +18,7 @@ const METODO_LABELS: Record<string, string> = {
 export function sanitizeText(value: unknown): string {
   return String(value ?? '')
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[̀-ͯ]/g, '')
     .replace(/[^\x20-\x7E\n\r\x1B\x1D]/g, '');
 }
 
@@ -26,7 +28,9 @@ export function labelMetodo(raw: unknown): string {
     return key.split('+').map(part => labelMetodo(part.trim())).join(' + ');
   }
 
-  return METODO_LABELS[key] || capitalize(key) || 'Efectivo';
+  // Una clave del catálogo sin etiqueta propia nunca debe salir cruda en papel
+  // ("Tarjeta_credito"): el guion bajo pasa a espacio.
+  return METODO_LABELS[key] || capitalize(key.replace(/_+/g, ' ')) || 'Efectivo';
 }
 
 export function center(text: unknown, width = 48): string {
@@ -89,8 +93,19 @@ export function formatTime(date: Date, timezone = 'America/Bogota'): string {
   }
 }
 
+/**
+ * Líneas en blanco con que termina toda tirilla. La cuchilla queda unas cuatro
+ * líneas por encima del cabezal y el print-server corta apenas llega el último
+ * byte: sin este avance, el corte cae sobre lo último impreso y ese texto sale
+ * pegado al comienzo de la tirilla siguiente.
+ */
+export const AVANCE_CORTE: readonly string[] = ['', '', '', '', ''];
+
 export function footer(width = 48, text = 'Desarrollado por www.foodly.com.co'): string {
-  return ['', center(text, width), '', '', '', '', ''].join('\n');
+  // En 58mm la marca completa no cabe (34 > 32) y la impresora dejaba "co"
+  // solo en otra línea: sin el "www." sí cabe.
+  const marca = text.length > width ? text.replace(/www\./i, '') : text;
+  return ['', center(marca, width), ...AVANCE_CORTE].join('\n');
 }
 
 export function clampColumns(columns?: number): number {

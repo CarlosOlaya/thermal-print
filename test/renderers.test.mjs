@@ -551,3 +551,122 @@ for (const payload of [
 }
 
 console.log('OK — efectivo recibido y cambio (32 y 48 col, exacto, dividido, fiscal y sin dato)');
+
+// ── Rayas justas, total en negrilla y avance al corte (tirilla DJFE30) ─────
+// Una raya ENTRE secciones y la doble solo para abrir el bloque fiscal: antes
+// salían "----" y "====" pegadas, y dobles rayas encerrando el total.
+const esRaya = (l) => /^(-+|=+)$/.test(l);
+const feAlegra = {
+  ...feTicket,
+  tipo_label: 'FACTURA ELECTRONICA DE VENTA',
+  es_cufe: true,
+  software: 'Proveedor tecnologico: Soluciones Alegra S.A.S - Software: Alegra - NIT 900.559.088-2',
+};
+const tirillaFoto = {
+  tenant_nombre: 'Ramirez Camargo Juan de Jesus', nit: '1140879485', numero_factura: 'PED-00030',
+  mesa_nombre: 'Principal 1', mesero: 'Admin DJR',
+  items: [{ cantidad: 1, nombre: 'Servicio Comedor', precio_unitario: 99800 }],
+  subtotal: 99800, total: 99800, metodo_pago: 'tarjeta_credito',
+  pagos: [{ metodo: 'tarjeta_credito', monto: 99800, propina: 0 }],
+  fe: feAlegra,
+};
+const escenariosRayas = {
+  'fiscal con tarjeta': tirillaFoto,
+  'fiscal con servicio e impuesto': {
+    ...pedidoEfectivo, fe: { ...feAlegra, impuesto: { label: 'IMPOCONSUMO', tarifa: 8, base: 35185.19, monto: 2814.81 } },
+  },
+  'control interno con servicio y cambio': { ...pedidoEfectivo, efectivo_recibido: 50000, cambio: 8200 },
+  'descuento, domicilio y dividido': {
+    ...pedidoEfectivo,
+    descuento_monto: 2000, motivo_descuento_mesa: 'Cliente frecuente',
+    recaudo_domicilio_monto: 4000, total_cliente: 45800, metodo_pago: 'efectivo+nequi',
+    pagos: [{ metodo: 'efectivo', monto: 20000, propina: 2000 }, { metodo: 'nequi', monto: 16000, propina: 1800 }],
+  },
+  'sin items ni pagos': { tenant_nombre: 'Restaurante', numero_factura: 'PED-2', items: [], total: 0 },
+};
+for (const [nombre, payload] of Object.entries(escenariosRayas)) {
+  for (const w of [32, 48]) {
+    const lineas = renderFactura(payload, { now, columns: w }).split('\n');
+    for (let i = 1; i < lineas.length; i++) {
+      assert.ok(!(esRaya(lineas[i - 1]) && esRaya(lineas[i])), `rayas pegadas en "${nombre}" (${w} col), linea ${i}`);
+    }
+    const dobles = lineas.filter((l) => /^=+$/.test(l));
+    if (payload.fe) {
+      assert.equal(dobles.length, 1, `una sola doble raya en "${nombre}" (${w} col)`);
+      const abre = lineas[lineas.findIndex((l) => /^=+$/.test(l)) + 1];
+      assert.match(abre, /FACTURA ELECTRONICA DE VENTA/, `la doble raya abre el bloque fiscal en "${nombre}" (${w} col)`);
+    } else {
+      assert.equal(dobles.length, 0, `sin dobles rayas en "${nombre}" (${w} col)`);
+    }
+  }
+}
+
+const foto = renderFactura(tirillaFoto, { now, columns: 48 });
+assert.match(foto, /^Tarjeta credito: +\$99\.800$/m, 'el metodo sale con su nombre, no con la clave del catalogo');
+assert.doesNotMatch(foto, /Tarjeta_credito/i);
+assert.doesNotMatch(foto, /SUBTOTAL/, 'sin ajustes el subtotal solo repetia el total');
+assert.ok(foto.includes(`${escBold(true)}TOTAL PEDIDO:`), 'el total va en negrilla');
+assert.match(renderFactura(pedidoEfectivo, { now, columns: 32 }), /SUBTOTAL: +\$38\.000/, 'con servicio el subtotal si informa');
+assert.match(
+  renderFactura({ ...pedidoEfectivo, pagos: [{ metodo: 'bono_regalo', monto: 38000, propina: 3800 }] }, { now, columns: 48 }),
+  /^Bono regalo: +\$38\.000$/m,
+  'una clave sin etiqueta tampoco sale con guion bajo',
+);
+
+// Dividido: sin servicio, una línea por método; con servicio conserva su desglose.
+const divididoSinServicio = renderFactura({
+  ...pedidoEfectivo, propina: 0, total: 38000, metodo_pago: 'efectivo+transferencia',
+  pagos: [{ metodo: 'efectivo', monto: 20000, propina: 0 }, { metodo: 'transferencia', monto: 18000, propina: 0 }],
+}, { now, columns: 32 });
+assert.match(divididoSinServicio, /^Efectivo: +\$20\.000$/m);
+assert.match(divididoSinServicio, /^Transferencia: +\$18\.000$/m);
+assert.doesNotMatch(divididoSinServicio, /Total metodo/);
+assert.match(dividido, /\+ Servicio: +\$2\.000/);
+assert.match(dividido, /Total metodo: +\$22\.000/);
+
+// El avance de papel va SIEMPRE al final: con FE el pie de marca se omite y sin
+// su avance la cuchilla cortaba sobre el software, su NIT y el agradecimiento.
+for (const payload of [tirillaFoto, pedidoEfectivo]) {
+  for (const w of [32, 48]) {
+    assert.match(renderFactura(payload, { now, columns: w }), /\n{5}$/, `sin avance al corte (${w} col)`);
+  }
+}
+const cierreFiscal = foto.split('\n');
+const iGracias = cierreFiscal.findIndex((l) => l.includes('Gracias por su visita!'));
+assert.ok(cierreFiscal.slice(0, iGracias).some((l) => l.includes('NIT 900.559.088-2')), 'el software va completo antes del agradecimiento');
+assert.deepEqual(cierreFiscal.slice(iGracias + 1), ['', '', '', '', ''], 'tras el agradecimiento solo queda el avance al corte');
+
+// Nada se sale del papel: una línea más ancha que el rollo la parte la impresora
+// donde quiera (en 58mm el pie dejaba "co" solo y el software salía "Solucione / s").
+const sinMarcas = (t) => t.split(escBold(true)).join('').split(escBold(false)).join('');
+for (const [nombre, payload] of Object.entries(escenariosRayas)) {
+  for (const w of [32, 48]) {
+    for (const linea of sinMarcas(renderFactura(payload, { now, columns: w })).split('\n')) {
+      if (linea.includes('\x1E')) continue; // el QR es un bloque nativo, no una línea de texto
+      assert.ok(linea.length <= w, `linea de ${linea.length} > ${w} col en "${nombre}": "${linea}"`);
+    }
+  }
+}
+assert.match(
+  renderFactura(tirillaFoto, { now, columns: 32 }),
+  /^ *Soluciones Alegra S\.A\.S *$/m,
+  'el proveedor tecnologico se envuelve por palabras en 58mm',
+);
+
+// Resolución y adquirente largos, también por palabras: en 58mm el rango
+// autorizado salía partido ("DJFE 1-5000" / "000").
+const fiscalLargo = renderFactura({
+  ...tirillaFoto,
+  fe: {
+    ...feAlegra,
+    resolucion: 'Res 18764115326150 - DJFE 1-5000000',
+    adquirente: 'Distribuidora de Alimentos del Caribe SAS - NIT 900123456-7',
+  },
+}, { now, columns: 32 });
+assert.match(fiscalLargo, /^ *1-5000000 *$/m, 'el rango de la resolucion no se parte a la mitad');
+assert.match(fiscalLargo, /^ *Caribe SAS - NIT 900123456-7 *$/m, 'el adquirente largo se envuelve por palabras');
+for (const linea of sinMarcas(fiscalLargo).split('\n')) {
+  if (!linea.includes('\x1E')) assert.ok(linea.length <= 32, `linea de ${linea.length} > 32 col: "${linea}"`);
+}
+
+console.log('OK — rayas justas, total en negrilla, metodo legible y avance al corte (32 y 48 col)');
