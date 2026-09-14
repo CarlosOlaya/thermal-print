@@ -53,6 +53,7 @@ export function renderFactura(factura: FacturaCerradaPayload, options: ThermalRe
   renderItems(lines, factura.items || [], width, sep);
   renderTotals(lines, factura, width, sep2);
   renderPayments(lines, factura, width, sep);
+  renderCambio(lines, factura, width, sep);
 
   // Con documento electrónico ACEPTADO la tirilla es fiscal (número DIAN +
   // CUFE/CUDE + QR); sin él, sigue siendo control interno.
@@ -352,6 +353,22 @@ function renderPayment(lines: string[], payment: PagoEventoItem, width: number, 
 
   lines.push(leftRight(`${method.padEnd(14, ' ')}:`, `$${formatMoney(amount)}`, width));
   if (tip > 0) lines.push(leftRight('  + Servicio:', `$${formatMoney(tip)}`, width));
+}
+
+/**
+ * Efectivo que entregó el cliente y el cambio que le corresponde (apoyo de
+ * vueltas). La API ya lo midió contra lo que el pedido cobra en efectivo, así
+ * que aquí no se recalcula nada; un dato incompleto o incoherente no se imprime,
+ * porque en papel le prometería al comensal un cambio que no es.
+ */
+function renderCambio(lines: string[], factura: FacturaCerradaPayload, width: number, sep: string): void {
+  const recibido = factura.efectivo_recibido;
+  const cambio = factura.cambio;
+  if (typeof recibido !== 'number' || typeof cambio !== 'number') return;
+  if (!(recibido > 0) || !(cambio >= 0) || cambio > recibido) return;
+  lines.push(leftRight('EFECTIVO RECIBIDO:', `$${formatMoney(recibido)}`, width));
+  lines.push(leftRight('CAMBIO:', `$${formatMoney(cambio)}`, width));
+  lines.push(sep);
 }
 
 function renderReason(lines: string[], reason: unknown, prefix = '      Motivo: '): void {

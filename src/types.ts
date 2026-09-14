@@ -93,6 +93,14 @@ export interface FacturaCerradaPayload {
   pagos?: PagoEventoItem[];
   recaudo_domicilio_monto?: number;
   total_cliente?: number;
+  /**
+   * Efectivo que entregó el cliente, tal como lo registró la caja con el apoyo
+   * de vueltas. La API solo lo envía cuando alcanza para lo que el pedido cobra
+   * en efectivo; sin él, la tirilla no imprime el bloque de cambio.
+   */
+  efectivo_recibido?: number;
+  /** Cambio que se le devuelve al cliente: efectivo_recibido − efectivo a cobrar */
+  cambio?: number;
   entrega?: {
     nombre?: string;
     telefono?: string;

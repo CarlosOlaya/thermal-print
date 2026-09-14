@@ -360,6 +360,7 @@ function renderFactura(factura, options = {}) {
   renderItems(lines, factura.items || [], width, sep);
   renderTotals(lines, factura, width, sep2);
   renderPayments(lines, factura, width, sep);
+  renderCambio(lines, factura, width, sep);
   if (factura.fe) {
     renderFiscal(lines, factura.fe, width, sep2);
   } else {
@@ -579,6 +580,15 @@ function renderPayment(lines, payment, width, detailed, sep) {
   }
   lines.push(leftRight(`${method.padEnd(14, " ")}:`, `$${formatMoney(amount)}`, width));
   if (tip > 0) lines.push(leftRight("  + Servicio:", `$${formatMoney(tip)}`, width));
+}
+function renderCambio(lines, factura, width, sep) {
+  const recibido = factura.efectivo_recibido;
+  const cambio = factura.cambio;
+  if (typeof recibido !== "number" || typeof cambio !== "number") return;
+  if (!(recibido > 0) || !(cambio >= 0) || cambio > recibido) return;
+  lines.push(leftRight("EFECTIVO RECIBIDO:", `$${formatMoney(recibido)}`, width));
+  lines.push(leftRight("CAMBIO:", `$${formatMoney(cambio)}`, width));
+  lines.push(sep);
 }
 function renderReason(lines, reason, prefix = "      Motivo: ") {
   if (reason) lines.push(`${prefix}${sanitizeText(reason)}`);

@@ -488,3 +488,66 @@ for (const w of [32, 48]) {
 
 console.log('OK — tirilla fiscal DIAN (QR + CUFE + impuesto discriminado, 58mm y 80mm)');
 console.log('OK — denominación legal larga envuelta por palabras (32 y 48 col)');
+
+// ── Apoyo de vueltas: efectivo recibido y cambio ───────────────────────────
+// El comensal ve en su tirilla cuánto entregó y cuánto le devuelven. Va después
+// de las formas de pago (es un dato del efectivo, no del pedido) y antes del
+// bloque fiscal o del aviso de control interno, que cierran la tirilla.
+const pedidoEfectivo = {
+  tenant_nombre: 'Restaurante Prueba', numero_factura: 'PED-00080',
+  items: [{ cantidad: 1, nombre: 'Bandeja paisa', precio_unitario: 38000 }],
+  subtotal: 38000, propina: 3800, total: 41800, metodo_pago: 'efectivo',
+  pagos: [{ metodo: 'efectivo', monto: 38000, propina: 3800 }],
+};
+for (const w of [32, 48]) {
+  const conCambio = renderFactura({ ...pedidoEfectivo, efectivo_recibido: 50000, cambio: 8200 }, { now, columns: w });
+  const lineas = conCambio.split('\n');
+  const recibido = lineas.findIndex((l) => /^EFECTIVO RECIBIDO: +\$50\.000$/.test(l));
+  const cambio = lineas.findIndex((l) => /^CAMBIO: +\$8\.200$/.test(l));
+  assert.ok(recibido >= 0, `efectivo recibido ausente (${w} col)`);
+  assert.equal(cambio, recibido + 1, `el cambio va justo debajo de lo recibido (${w} col)`);
+  assert.ok(recibido > lineas.findIndex((l) => l.includes('FORMAS DE PAGO')), `recibido antes de las formas de pago (${w} col)`);
+  assert.ok(cambio < lineas.findIndex((l) => l.includes('SOLO PARA CONTROL INTERNO')), `cambio fuera del cuerpo de la tirilla (${w} col)`);
+  for (const linea of [lineas[recibido], lineas[cambio]]) {
+    assert.ok(linea.length <= w, `linea de ${linea.length} > ${w} col: "${linea}"`);
+  }
+}
+
+// Pago exacto: cambio $0, que también se informa (confirma que no hay vueltas)
+const exacto = renderFactura({ ...pedidoEfectivo, efectivo_recibido: 41800, cambio: 0 }, { now, columns: 32 });
+assert.match(exacto, /EFECTIVO RECIBIDO: +\$41\.800/);
+assert.match(exacto, /CAMBIO: +\$0$/m);
+
+// Pago dividido: lo recibido es solo de la parte en efectivo y va tras el total cobrado
+const dividido = renderFactura({
+  ...pedidoEfectivo,
+  metodo_pago: 'efectivo+tarjeta',
+  pagos: [
+    { metodo: 'efectivo', monto: 20000, propina: 2000 },
+    { metodo: 'tarjeta', monto: 18000, propina: 1800 },
+  ],
+  efectivo_recibido: 30000, cambio: 8000,
+}, { now, columns: 48 });
+assert.ok(dividido.indexOf('TOTAL COBRADO:') < dividido.indexOf('EFECTIVO RECIBIDO:'));
+assert.match(dividido, /CAMBIO: +\$8\.000/);
+
+// Con documento electrónico, el cambio queda antes del bloque fiscal
+const fiscalConCambio = renderFactura(
+  { ...pedidoEfectivo, fe: feTicket, efectivo_recibido: 50000, cambio: 8200 },
+  { now, columns: 48 },
+);
+assert.ok(fiscalConCambio.indexOf('CAMBIO:') < fiscalConCambio.indexOf('CUDE:'), 'el cambio va antes del bloque fiscal');
+
+// Sin el dato completo y coherente la tirilla queda como siempre: caja sin
+// apoyo de vueltas, reimpresión, o un cambio que no cuadra.
+for (const payload of [
+  pedidoEfectivo,
+  { ...pedidoEfectivo, efectivo_recibido: 0, cambio: 0 },
+  { ...pedidoEfectivo, efectivo_recibido: 50000 },
+  { ...pedidoEfectivo, efectivo_recibido: 30000, cambio: -11800 },
+  { ...pedidoEfectivo, efectivo_recibido: 50000, cambio: 60000 },
+]) {
+  assert.doesNotMatch(renderFactura(payload, { now, columns: 32 }), /EFECTIVO RECIBIDO|CAMBIO:/);
+}
+
+console.log('OK — efectivo recibido y cambio (32 y 48 col, exacto, dividido, fiscal y sin dato)');
