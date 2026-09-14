@@ -339,13 +339,13 @@ function renderComandaAnulacion(payload, options = {}) {
 // src/renderers/factura.ts
 function renderFactura(factura, options = {}) {
   const width = clampColumns(options.columns);
-  const now = options.now || /* @__PURE__ */ new Date();
   const timezone = options.timezone || "America/Bogota";
+  const fiscal = factura.fe;
+  const now = fechaValida(fiscal?.fecha_generacion) || options.now || /* @__PURE__ */ new Date();
   const encabezado = [];
-  if (factura.tenant_nombre) encabezado.push(center(String(factura.tenant_nombre).toUpperCase(), width));
-  if (factura.nit) encabezado.push(center(`NIT: ${factura.nit}`, width));
+  renderEncabezado(encabezado, factura, width);
   const datos = [];
-  if (!factura.fe) datos.push(center(factura.numero_factura || "PEDIDO", width));
+  if (!fiscal) datos.push(center(factura.numero_factura || "PEDIDO", width));
   if (width >= 42) {
     datos.push(`Fecha: ${formatDate(now, timezone)}        Hora: ${formatTime(now, timezone)}`);
   } else {
@@ -356,7 +356,8 @@ function renderFactura(factura, options = {}) {
   datos.push(`Mesero: ${sanitizeText(factura.mesero || "")}`);
   renderCliente(datos, factura);
   const detalle = [];
-  renderItems(detalle, factura.items || [], width);
+  if (fiscal) renderItemsFiscales(detalle, factura.items || [], width);
+  else renderItems(detalle, factura.items || [], width);
   const totales = [];
   renderTotals(totales, factura, width);
   const pagos = [];
@@ -364,20 +365,25 @@ function renderFactura(factura, options = {}) {
   renderCambio(pagos, factura, width);
   const sep = "-".repeat(width);
   const lines = unirSecciones([encabezado, datos, detalle, totales, pagos], sep);
-  if (factura.fe) {
+  if (fiscal) {
     lines.push("=".repeat(width));
-    renderFiscal(lines, factura.fe, width);
+    renderFiscal(lines, fiscal, width);
   } else {
     lines.push(sep);
     lines.push(center("** SOLO PARA CONTROL INTERNO **", width));
   }
   lines.push(center("Gracias por su visita!", width));
-  if (factura.fe?.software) {
+  if (fiscal?.software) {
     lines.push(...AVANCE_CORTE);
   } else {
     lines.push(footer(width, options.footer));
   }
   return lines.join("\n");
+}
+function fechaValida(valor) {
+  if (typeof valor !== "string" || !valor) return null;
+  const fecha = new Date(valor);
+  return Number.isNaN(fecha.getTime()) ? null : fecha;
 }
 function unirSecciones(secciones, sep) {
   const lines = [];
@@ -390,6 +396,26 @@ function unirSecciones(secciones, sep) {
 }
 function negrilla(linea) {
   return escBold(true) + linea + escBold(false);
+}
+function centrado(lines, texto, width) {
+  for (const l of wrapWords(texto, width)) lines.push(center(l, width));
+}
+function renderEncabezado(lines, factura, width) {
+  const emisor = factura.fe?.emisor;
+  if (!emisor?.razon_social) {
+    if (factura.tenant_nombre) lines.push(center(String(factura.tenant_nombre).toUpperCase(), width));
+    if (factura.nit) lines.push(center(`NIT: ${factura.nit}`, width));
+    return;
+  }
+  const marca = factura.tenant_nombre || emisor.nombre_comercial;
+  if (marca && normalizar(marca) !== normalizar(emisor.razon_social)) {
+    centrado(lines, sanitizeText(marca).toUpperCase(), width);
+  }
+  centrado(lines, sanitizeText(emisor.razon_social).toUpperCase(), width);
+  if (emisor.nit) lines.push(center(`NIT: ${sanitizeText(emisor.nit)}`, width));
+  for (const calidad of factura.fe?.responsabilidades || []) {
+    if (calidad) centrado(lines, sanitizeText(calidad), width);
+  }
 }
 var TIPO_DOC_SIGLA = {
   "13": "CC",
@@ -426,19 +452,13 @@ function renderCliente(lines, factura) {
   if (factura.localizador) lines.push(`Localizador: ${sanitizeText(factura.localizador)}`);
 }
 function renderFiscal(lines, fe, width) {
-  for (const l of wrapWords(sanitizeText(fe.tipo_label || "DOCUMENTO ELECTRONICO"), width)) {
-    lines.push(center(l, width));
-  }
+  centrado(lines, sanitizeText(fe.tipo_label || "DOCUMENTO ELECTRONICO"), width);
   lines.push(center(sanitizeText(fe.numero || ""), width));
-  if (fe.adquirente) {
-    for (const l of wrapWords(sanitizeText(fe.adquirente), width)) lines.push(center(l, width));
-  }
+  if (fe.adquirente) centrado(lines, sanitizeText(fe.adquirente), width);
   if (fe.fecha_expedicion) {
     lines.push(center(`Expedicion: ${sanitizeText(fe.fecha_expedicion)}`, width));
   }
-  if (fe.resolucion) {
-    for (const l of wrapWords(sanitizeText(fe.resolucion), width)) lines.push(center(l, width));
-  }
+  if (fe.resolucion) centrado(lines, sanitizeText(fe.resolucion), width);
   if (fe.cufe) {
     lines.push(center(fe.es_cufe === false ? "CUDE:" : "CUFE:", width));
     for (const l of wrap(fe.cufe, width)) lines.push(center(l, width));
@@ -448,14 +468,14 @@ function renderFiscal(lines, fe, width) {
     lines.push(qrMarker(fe.qr, width >= 42 ? 7 : 5));
     lines.push("");
   }
-  if (fe.url) {
+  if (fe.url && !fe.qr) {
     lines.push(center("Verifica en la DIAN:", width));
     for (const l of wrap(fe.url, width)) lines.push(center(l, width));
   }
   if (fe.software) {
-    lines.push("");
+    if (lines[lines.length - 1] !== "") lines.push("");
     for (const parte of sanitizeText(fe.software).split(" - ")) {
-      for (const l of wrapWords(parte.trim(), width)) lines.push(center(l, width));
+      centrado(lines, parte.trim(), width);
     }
   }
 }
@@ -502,6 +522,53 @@ function renderItems(lines, items, width) {
       renderNarrowItem(lines, item, width);
     }
   }
+}
+function renderItemsFiscales(lines, items, width) {
+  if (!items.length) return;
+  const ancho = width >= 42;
+  const anchoNombre = Math.max(8, width - 26);
+  if (ancho) {
+    lines.push(` # CANT ${"PRODUCTO".padEnd(anchoNombre, " ")} ${"V.UNI".padStart(8, " ")} ${"TOTAL".padStart(8, " ")}`);
+  } else {
+    lines.push(leftRight(" # CANT PRODUCTO", "TOTAL", width));
+  }
+  items.forEach((item, indice) => {
+    const numero = String(indice + 1).padStart(2, " ");
+    const cantidad = Number(item.cantidad) || 1;
+    const precio = Number(item.precio_unitario) || 0;
+    const descuento = Number(item.descuento_monto) || 0;
+    const porcentaje = Number(item.descuento_porcentaje) || 0;
+    const neto = item.es_cortesia ? 0 : Math.max(0, precio * cantidad - descuento);
+    const nombre = sanitizeText(item.nombre || item.plato || "");
+    if (ancho) {
+      const total = item.es_cortesia ? "$0" : formatMoney(neto);
+      lines.push(
+        `${numero} ${String(cantidad).padStart(4, " ")} ${nombre.substring(0, anchoNombre).padEnd(anchoNombre, " ")} ${rightPadMoney(formatMoney(precio), 8)} ${rightPadMoney(total, 8)}`
+      );
+    } else {
+      const derecha = `$${formatMoney(neto)}`;
+      const izquierda = `${numero} ${cantidad}x `;
+      const maxNombre = Math.max(4, width - izquierda.length - derecha.length - 1);
+      lines.push(leftRight(`${izquierda}${nombre.substring(0, maxNombre)}`, derecha, width));
+    }
+    const identificacion = [
+      item.codigo ? `Cod ${sanitizeText(item.codigo)}` : "",
+      item.unidad ? sanitizeText(item.unidad) : ""
+    ].filter(Boolean).join(" ");
+    const marca = item.es_cortesia ? "** CORTESIA **" : descuento > 0 ? ancho && porcentaje > 0 ? `Dcto -${porcentaje}% (-$${formatMoney(descuento)})` : `Dcto (-$${formatMoney(descuento)})` : "";
+    const sangria = ancho ? "      " : "   ";
+    const juntos = [identificacion, marca].filter(Boolean).join("  ");
+    if (juntos && sangria.length + juntos.length <= width) {
+      lines.push(sangria + juntos);
+    } else {
+      if (identificacion) lines.push(sangria + identificacion);
+      if (marca) lines.push(sangria + marca);
+    }
+    if (item.es_cortesia || descuento > 0) {
+      renderReason(lines, item.motivo_descuento || (ancho || item.es_cortesia ? item.comentario : void 0));
+    }
+  });
+  lines.push(`Total items: ${items.length}`);
 }
 function renderWideItem(lines, item) {
   const qty = String(item.cantidad || 1).padStart(3, " ");
@@ -573,16 +640,18 @@ function renderTotals(lines, factura, width) {
 }
 function renderPayments(lines, factura, width) {
   const payments = factura.pagos || [];
+  const forma = factura.fe?.forma_pago ? sanitizeText(factura.fe.forma_pago).toUpperCase() : "";
+  const titulo = (dividido) => forma ? `FORMA DE PAGO: ${forma}${dividido ? " (DIVIDIDO)" : ""}` : `FORMAS DE PAGO${dividido ? " (DIVIDIDO)" : ""}`;
   if (payments.length > 1) {
-    lines.push(center("FORMAS DE PAGO (DIVIDIDO)", width));
+    centrado(lines, titulo(true), width);
     for (const payment of payments) renderPayment(lines, payment, width, true);
     const totalCobrado = payments.reduce((sum, payment) => sum + Number(payment.monto || 0) + Number(payment.propina || 0), 0);
     lines.push(leftRight("TOTAL COBRADO:", `$${formatMoney(totalCobrado)}`, width));
   } else if (payments.length === 1) {
-    lines.push(center("FORMAS DE PAGO", width));
+    centrado(lines, titulo(false), width);
     renderPayment(lines, payments[0], width, false);
   } else if (factura.metodo_pago) {
-    lines.push(center("FORMAS DE PAGO", width));
+    centrado(lines, titulo(false), width);
     lines.push(leftRight(`${labelMetodo(factura.metodo_pago)}:`, `$${formatMoney(factura.total)}`, width));
   }
 }
