@@ -11,9 +11,8 @@ export declare function renderNotaCredito(data: ThermalDocumentPayload, options?
 export declare function renderTomaInventario(data: ThermalTomaInventarioPayload, options?: ThermalRenderOptions): string;
 /**
  * Agenda de reservas de un día: la hoja de trabajo con la que el encargado
- * reubica las mesas. Cada reserva ocupa un bloque con hora, nombre, personas y
- * ubicación; el motivo y las notas solo salen si existen. Cuando la reserva no
- * tiene mesa asignada, la ubicación se imprime como una raya en blanco para
- * anotarla a mano.
+ * organiza las mesas. Cada reserva ocupa un bloque con hora, nombre, personas,
+ * zona preferida y mesa asignada; el motivo y las notas solo salen si existen.
+ * Cuando la reserva no tiene mesa, se imprime una raya para anotarla a mano.
  */
 export declare function renderReservasDia(data: ThermalReservasDiaPayload, options?: ThermalRenderOptions): string;

@@ -495,18 +495,17 @@ export function renderTomaInventario(data: ThermalTomaInventarioPayload, options
 
 /**
  * Agenda de reservas de un día: la hoja de trabajo con la que el encargado
- * reubica las mesas. Cada reserva ocupa un bloque con hora, nombre, personas y
- * ubicación; el motivo y las notas solo salen si existen. Cuando la reserva no
- * tiene mesa asignada, la ubicación se imprime como una raya en blanco para
- * anotarla a mano.
+ * organiza las mesas. Cada reserva ocupa un bloque con hora, nombre, personas,
+ * zona preferida y mesa asignada; el motivo y las notas solo salen si existen.
+ * Cuando la reserva no tiene mesa, se imprime una raya para anotarla a mano.
  */
 export function renderReservasDia(data: ThermalReservasDiaPayload, options: ThermalRenderOptions = {}): string {
   const ctx = context(options);
   const lines = header(data, 'RESERVAS DEL DIA', ctx);
   const reservas = arr(data.reservas);
   const personas = reservas.reduce((sum, reserva) => sum + num(reserva.personas), 0);
-  // Raya para anotar a mano la ubicación de quien aún no tiene mesa asignada.
-  const rayaUbicacion = '_'.repeat(Math.max(10, ctx.width - 15));
+  // Raya para anotar a mano la mesa de quien aún no tiene una asignada.
+  const rayaMesa = '_'.repeat(Math.max(10, ctx.width - 10));
 
   lines.push(escBold(true) + center(fechaAgenda(data, ctx), ctx.width) + escBold(false));
   lines.push(`Impreso: ${formatDate(ctx.now, ctx.timezone)} ${formatTime(ctx.now, ctx.timezone)}`);
@@ -530,7 +529,10 @@ export function renderReservasDia(data: ThermalReservasDiaPayload, options: Ther
     const nombre = text(reserva.nombre_cliente || reserva.nombre).toUpperCase().substring(0, nombreMax);
 
     lines.push(escBold(true) + leftRight(`${hora} ${nombre}`, pers, ctx.width) + escBold(false));
-    lines.push(`  Ubicacion: ${text(reserva.ubicacion || reserva.mesa) || rayaUbicacion}`);
+    if (reserva.zona_preferida) {
+      pushWrapped(lines, 'Zona preferida', reserva.zona_preferida, ctx);
+    }
+    pushWrapped(lines, 'Mesa asignada', text(reserva.mesa || reserva.ubicacion) || rayaMesa, ctx);
     if (reserva.motivo) pushWrapped(lines, 'Motivo', reserva.motivo, ctx);
     if (reserva.notas) pushWrapped(lines, 'Notas', reserva.notas, ctx);
     lines.push(ctx.sep);
@@ -540,7 +542,7 @@ export function renderReservasDia(data: ThermalReservasDiaPayload, options: Ther
   lines.push(leftRight('Total personas:', personas, ctx.width));
   lines.push(ctx.sep2);
   lines.push('');
-  for (const linea of wrapWords('Reubique las mesas segun esta agenda.', ctx.width)) {
+  for (const linea of wrapWords('Organice las mesas segun esta agenda.', ctx.width)) {
     lines.push(center(linea, ctx.width));
   }
   lines.push(footer(ctx.width, options.footer));

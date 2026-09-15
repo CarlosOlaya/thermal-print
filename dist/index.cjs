@@ -1160,7 +1160,7 @@ function renderReservasDia(data, options = {}) {
   const lines = header(data, "RESERVAS DEL DIA", ctx);
   const reservas = arr(data.reservas);
   const personas = reservas.reduce((sum, reserva) => sum + num(reserva.personas), 0);
-  const rayaUbicacion = "_".repeat(Math.max(10, ctx.width - 15));
+  const rayaMesa = "_".repeat(Math.max(10, ctx.width - 10));
   lines.push(escBold(true) + center(fechaAgenda(data, ctx), ctx.width) + escBold(false));
   lines.push(`Impreso: ${formatDate(ctx.now, ctx.timezone)} ${formatTime(ctx.now, ctx.timezone)}`);
   if (data.generado_por) lines.push(`Genera:  ${text(data.generado_por)}`);
@@ -1179,7 +1179,10 @@ function renderReservasDia(data, options = {}) {
     const nombreMax = Math.max(6, ctx.width - hora.length - pers.length - 2);
     const nombre = text(reserva.nombre_cliente || reserva.nombre).toUpperCase().substring(0, nombreMax);
     lines.push(escBold(true) + leftRight(`${hora} ${nombre}`, pers, ctx.width) + escBold(false));
-    lines.push(`  Ubicacion: ${text(reserva.ubicacion || reserva.mesa) || rayaUbicacion}`);
+    if (reserva.zona_preferida) {
+      pushWrapped(lines, "Zona preferida", reserva.zona_preferida, ctx);
+    }
+    pushWrapped(lines, "Mesa asignada", text(reserva.mesa || reserva.ubicacion) || rayaMesa, ctx);
     if (reserva.motivo) pushWrapped(lines, "Motivo", reserva.motivo, ctx);
     if (reserva.notas) pushWrapped(lines, "Notas", reserva.notas, ctx);
     lines.push(ctx.sep);
@@ -1188,7 +1191,7 @@ function renderReservasDia(data, options = {}) {
   lines.push(leftRight("Total personas:", personas, ctx.width));
   lines.push(ctx.sep2);
   lines.push("");
-  for (const linea of wrapWords2("Reubique las mesas segun esta agenda.", ctx.width)) {
+  for (const linea of wrapWords2("Organice las mesas segun esta agenda.", ctx.width)) {
     lines.push(center(linea, ctx.width));
   }
   lines.push(footer(ctx.width, options.footer));

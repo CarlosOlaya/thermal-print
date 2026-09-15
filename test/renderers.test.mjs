@@ -269,7 +269,8 @@ const reservasPayload = {
   reservas: [
     {
       hora: '19:30:00', nombre_cliente: 'Carlos Olaya', personas: 4,
-      ubicacion: 'Terraza 2', motivo: 'Cumpleaños',
+      mesa: 'Terraza 2', zona_preferida: 'Terraza junto a la ventana principal',
+      motivo: 'Cumpleaños',
       notas: 'Traer la torta cuando terminen el plato fuerte, por favor',
     },
     { hora: '08:00', nombre_cliente: 'Ana Maria Restrepo Villegas', personas: 2 },
@@ -286,11 +287,12 @@ for (const w of [32, 48]) {
   assert.match(agenda, / 7:30 PM/, `hora vespertina en 12h (${w} col)`);
   assert.match(agenda, / 8:00 AM/, `hora matutina en 12h (${w} col)`);
   assert.match(agenda, /4 pers/);
-  assert.match(agenda, /Ubicacion: Terraza 2/);
+  assert.match(agenda, /Zona preferida: Terraza\s+junto a la ventana\s+principal/);
+  assert.match(agenda, /Mesa asignada: Terraza 2/);
   assert.match(agenda, /Motivo: Cumpleanos/);
   assert.match(agenda, /Traer la torta/);
-  // Sin mesa asignada ⇒ raya en blanco para anotar la ubicación a mano.
-  assert.match(agenda, /Ubicacion: _{10,}/, `raya de ubicacion ausente (${w} col)`);
+  // Sin mesa asignada ⇒ raya en blanco para anotarla a mano.
+  assert.match(agenda, /Mesa asignada:\s+_{10,}/, `raya de mesa ausente (${w} col)`);
   assert.match(agenda, /Total reservas:\s+2/);
   assert.match(agenda, /Total personas:\s+6/);
 
@@ -314,7 +316,7 @@ const agendaVacia = renderReservasDia({ tenant_nombre: 'Crokanza', fecha: '2026-
 assert.match(agendaVacia, /Sin reservas para este dia/);
 assert.doesNotMatch(agendaVacia, /Total reservas:/);
 
-console.log('OK — agenda de reservas del dia (32 y 48 col, ubicacion en blanco y notas envueltas)');
+console.log('OK — agenda de reservas (32/48 col, zona preferida y mesa asignada separadas)');
 
 // ── Tirilla fiscal (documento electrónico DIAN): número, CUFE/CUDE y QR nativo ──
 const feTicket = {

@@ -218,12 +218,11 @@ export interface ThermalReservaItem {
   nombre_cliente?: string;
   nombre?: string;
   personas?: number;
-  /**
-   * Mesa o zona asignada. Si viene vacía, la tirilla imprime una raya en blanco
-   * para que el encargado anote a mano la ubicación al reubicar las mesas.
-   */
+  /** Mesa asignada. Si falta, la tirilla deja una raya para completarla a mano. */
   ubicacion?: string;
   mesa?: string;
+  /** Zona solicitada por el cliente; es una preferencia, no una asignación. */
+  zona_preferida?: string;
   /** Ocasión especial ya en texto legible ("Cumpleaños", "Aniversario", …) */
   motivo?: string;
   notas?: string;
@@ -231,7 +230,7 @@ export interface ThermalReservaItem {
 
 /**
  * Agenda de reservas de UN día: la hoja que el encargado imprime para que el
- * personal reubique las mesas. El orden lo define quien arma el payload (la API
+ * personal organice las mesas. El orden lo define quien arma el payload (la API
  * la envía por hora ascendente); el renderer no reordena.
  */
 export interface ThermalReservasDiaPayload extends Record<string, unknown> {
