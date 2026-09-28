@@ -13,6 +13,7 @@ import {
   escBold,
   escCashDrawerPulse,
   escCut,
+  sanitizeText,
   textToEscPosBytes,
 } from '../dist/index.mjs';
 
@@ -120,6 +121,31 @@ assert.deepEqual(Array.from(textToEscPosBytes('X', { openCashDrawer: true }).sli
 assert.deepEqual(Array.from(textToEscPosBytes('X', { cut: true }).slice(-3)), Array.from(escCut()).map(char => char.charCodeAt(0)));
 assert.deepEqual(Array.from(textToEscPosBytes('X', { beepAfterPrint: true }).slice(-4)), Array.from(escBeep()).map(char => char.charCodeAt(0)));
 assert.notDeepEqual(Array.from(textToEscPosBytes('X').slice(2, 7)), Array.from(escCashDrawerPulse()).map(char => char.charCodeAt(0)));
+
+// Un valor con ESC/GS no llega a la impresora como comando: "\x1Bp0dd" en una
+// nota abría el cajón monedero y "\x1DV" cortaba el papel. Los comandos de los
+// renderers (negrilla) siguen intactos.
+assert.equal(sanitizeText('a\r\nb\rc\td\x1Be\x1Df\x00g\x7Fh'), 'a\nb\nc defgh');
+assert.equal(sanitizeText('Ñandú con piña'), 'Nandu con pina');
+const comandaSucia = renderComanda({
+  comanda: 7,
+  mesa_nombre: 'Mesa\x1B@ 4',
+  mesero: 'Ana\x1DV\x00',
+  cliente_nombre: 'Luis\x1Bp0dd',
+  localizador: '\x1Bp0dd12',
+  comensales: '2\x1Bp0dd',
+  area: 'cocina\x1DV\x01',
+  items: [{ nombre: 'Arepa\x1Bp0dd', cantidad: '1\x1Bp0dd', comentario: 'sin sal\x1DV\x00\x1Bp1dd' }],
+}, { now, columns: 48 });
+assert.ok(!/[\x1B\x1D][p@V]/.test(comandaSucia), 'ningun valor trae ESC p, ESC @ ni GS V');
+assert.ok(comandaSucia.includes(`${escBold(true)}Cliente: Luisp0dd${escBold(false)}`), 'la negrilla del renderer sigue');
+assert.match(comandaSucia, /> sin salVp1dd$/m, 'queda el texto imprimible; se van solo los controles');
+const bytesSucios = Array.from(textToEscPosBytes(comandaSucia));
+const secuencias = (a, b) => bytesSucios.filter((byte, i) => byte === a && bytesSucios[i + 1] === b).length;
+assert.equal(secuencias(0x1b, 0x70), 0, 'sin pulso del cajon');
+assert.equal(secuencias(0x1d, 0x56), 0, 'sin corte de papel');
+assert.equal(secuencias(0x1b, 0x40), 1, 'un solo reset: el del comienzo');
+assert.ok(secuencias(0x1b, 0x45) >= 2, 'la negrilla llega a la impresora');
 
 const precuenta = renderPrecuenta({
   tenant_nombre: 'Crokanza',

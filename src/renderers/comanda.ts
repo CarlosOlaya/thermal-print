@@ -31,13 +31,13 @@ export function renderComanda(payload: ThermalComandaPayload, options: ThermalRe
   lines.push(`${bold}${mesaLabel}${boldOff}   Mesero: ${sanitizeText(payload.mesero || '')}`);
   if (payload.cliente_nombre) lines.push(`${bold}Cliente: ${sanitizeText(payload.cliente_nombre)}${boldOff}`);
   if (payload.localizador) lines.push(`${bold}Localizador: ${sanitizeText(payload.localizador)}${boldOff}`);
-  if (payload.comensales) lines.push(`Personas: ${payload.comensales}`);
+  if (payload.comensales) lines.push(`Personas: ${sanitizeText(payload.comensales)}`);
   lines.push(`Fecha: ${formatDate(now, timezone)}   Hora: ${hora}`);
 
   const pushItems = (items: ThermalComandaItem[] | undefined): void => {
     for (const item of items || []) {
       const name = sanitizeText((item.nombre || item.producto || '').toUpperCase()).substring(0, Math.max(10, width - 6));
-      const qty = String(item.cantidad || 1).padStart(3, ' ');
+      const qty = sanitizeText(item.cantidad || 1).padStart(3, ' ');
       lines.push(bold + `${qty}  ${name}` + boldOff);
       if (item.comentario) lines.push(`      > ${sanitizeText(item.comentario)}`);
       lines.push('');
