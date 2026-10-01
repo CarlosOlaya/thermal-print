@@ -1340,14 +1340,12 @@ function renderDiscountSummary(lines, data, ctx) {
 }
 function renderExpenseRows(lines, items, ctx) {
   const valores = items.map((item) => money(item.monto));
-  const valorW = Math.max("VALOR".length, ...valores.map((valor) => valor.length));
+  const valorW = Math.max(...valores.map((valor) => valor.length));
   if (ctx.width >= 42) {
     const metodoW = 8;
     const categoriaW = 11;
     const conceptoW2 = Math.max(8, ctx.width - valorW - metodoW - categoriaW - 3);
     const fila = (concepto, categoria, metodo, valor) => `${concepto.padEnd(conceptoW2)} ${categoria.padEnd(categoriaW)} ${metodo.padEnd(metodoW)} ${valor.padStart(valorW)}`;
-    lines.push(fila("CONCEPTO", "CATEGORIA", "METODO", "VALOR"));
-    lines.push(ctx.sep);
     items.forEach((item, i) => {
       lines.push(fila(
         text(item.concepto).trim().substring(0, conceptoW2),
@@ -1360,9 +1358,6 @@ function renderExpenseRows(lines, items, ctx) {
     return;
   }
   const conceptoW = ctx.width - valorW - 1;
-  lines.push(`${"CONCEPTO".padEnd(conceptoW)} ${"VALOR".padStart(valorW)}`);
-  lines.push("  Categoria - Metodo");
-  lines.push(ctx.sep);
   items.forEach((item, i) => {
     lines.push(`${text(item.concepto).trim().substring(0, conceptoW).padEnd(conceptoW)} ${valores[i].padStart(valorW)}`);
     const metodo = labelMetodo(item.metodo_pago);

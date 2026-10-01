@@ -705,16 +705,19 @@ function renderDiscountSummary(lines: string[], data: ThermalDocumentPayload, ct
  * Un egreso por fila para que quien recibe el arqueo revise de un vistazo el
  * concepto, en qué categoría lo metieron, con qué método salió y cuánto.
  *
- * 80mm: CONCEPTO CATEGORIA METODO VALOR en una sola línea. El valor va a la
- * derecha con el ancho del monto más largo: antes la fila era 30+1+7+1+monto y
- * un $1.000.000 sumaba 49 columnas, así que el último 0 caía solo en la línea
+ * 80mm: concepto, categoría, método y valor en una sola línea. El valor va a
+ * la derecha con el ancho del monto más largo: antes la fila era 30+1+7+1+monto
+ * y un $1.000.000 sumaba 49 columnas, así que el último 0 caía solo en la línea
  * siguiente.
  * 58mm: cuatro columnas no caben legibles (la categoría quedaría en 7 letras):
  * concepto y valor arriba, categoría y método debajo.
+ *
+ * Sin encabezado de columnas (pedido de Carlos): el valor lleva su $ y el
+ * método se lee solo; el encabezado era papel sin información.
  */
 function renderExpenseRows(lines: string[], items: Row[], ctx: Ctx): void {
   const valores = items.map(item => money(item.monto));
-  const valorW = Math.max('VALOR'.length, ...valores.map(valor => valor.length));
+  const valorW = Math.max(...valores.map(valor => valor.length));
 
   if (ctx.width >= 42) {
     const metodoW = 8;
@@ -722,8 +725,6 @@ function renderExpenseRows(lines: string[], items: Row[], ctx: Ctx): void {
     const conceptoW = Math.max(8, ctx.width - valorW - metodoW - categoriaW - 3);
     const fila = (concepto: string, categoria: string, metodo: string, valor: string) =>
       `${concepto.padEnd(conceptoW)} ${categoria.padEnd(categoriaW)} ${metodo.padEnd(metodoW)} ${valor.padStart(valorW)}`;
-    lines.push(fila('CONCEPTO', 'CATEGORIA', 'METODO', 'VALOR'));
-    lines.push(ctx.sep);
     items.forEach((item, i) => {
       lines.push(fila(
         text(item.concepto).trim().substring(0, conceptoW),
@@ -737,9 +738,6 @@ function renderExpenseRows(lines: string[], items: Row[], ctx: Ctx): void {
   }
 
   const conceptoW = ctx.width - valorW - 1;
-  lines.push(`${'CONCEPTO'.padEnd(conceptoW)} ${'VALOR'.padStart(valorW)}`);
-  lines.push('  Categoria - Metodo');
-  lines.push(ctx.sep);
   items.forEach((item, i) => {
     lines.push(`${text(item.concepto).trim().substring(0, conceptoW).padEnd(conceptoW)} ${valores[i].padStart(valorW)}`);
     const metodo = labelMetodo(item.metodo_pago);

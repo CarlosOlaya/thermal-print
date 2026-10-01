@@ -806,7 +806,9 @@ const egresos = {
   },
 };
 const egresos80 = sinMarcas(renderGastosTurno(egresos, { now, columns: 48 })).split('\n');
-assert.ok(egresos80.some((l) => /^CONCEPTO +CATEGORIA +METODO +VALOR$/.test(l)), 'encabezado de cuatro columnas en 80mm');
+// Sin encabezado de columnas: la primera fila va justo debajo de la raya del cierre.
+assert.ok(!egresos80.some((l) => /^CONCEPTO\b/.test(l)), 'la tirilla de 80mm no imprime encabezado de columnas');
+assert.ok(egresos80[egresos80.findIndex((l) => l.startsWith('Cierre:')) + 2].startsWith('Hielo'), 'tras la raya va el primer egreso');
 const filaMillon = egresos80.find((l) => l.startsWith('Pago arriendo'));
 assert.ok(filaMillon.endsWith('$1.250.000'), `el millon cierra la fila sin partirse: "${filaMillon}"`);
 assert.match(filaMillon, /Arriendo +Transf\. +\$1\.250\.000$/);
@@ -818,6 +820,7 @@ assert.match(egresos80.find((l) => l.startsWith('Propina')), / - +Nequi /, 'sin 
 assert.ok(egresos80.includes('  Prov: Inmobiliaria del Caribe SAS'));
 
 const egresos58 = sinMarcas(renderGastosTurno(egresos, { now, columns: 32 })).split('\n');
+assert.ok(!egresos58.some((l) => /^CONCEPTO\b|Categoria - Metodo/.test(l)), 'la tirilla de 58mm tampoco imprime encabezado');
 assert.ok(egresos58.includes('Pago arriendo local o $1.250.000'), 'en 58mm el concepto y el valor van arriba');
 assert.ok(egresos58.includes('  Arriendo - Transferencia'), 'y la categoria con el metodo debajo');
 assert.ok(egresos58.includes('  Suministros - Efectivo'), 'un parentesis que no cabe no queda abierto');
