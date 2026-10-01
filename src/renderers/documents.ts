@@ -200,22 +200,8 @@ export function renderGastosTurno(data: ThermalDocumentPayload, options: Thermal
   lines.push(leftRight('Cajero:', text(data.cajero), ctx.width));
   lines.push(leftRight('Cierre:', dateTime(data.fecha_cierre || ctx.now, ctx), ctx.width));
   lines.push(ctx.sep);
-  lines.push(ctx.width >= 42 ? 'CONCEPTO                          METODO  MONTO' : 'CONCEPTO');
+  renderExpenseRows(lines, items, ctx);
   lines.push(ctx.sep);
-
-  for (const item of items) {
-    if (ctx.width >= 42) {
-      const concepto = text(item.concepto).substring(0, 30).padEnd(30, ' ');
-      const metodo = text(item.metodo_pago || 'efec').substring(0, 7).padEnd(7, ' ');
-      lines.push(`${concepto} ${metodo} ${money(item.monto)}`);
-    } else {
-      lines.push(text(item.concepto).substring(0, ctx.width));
-      lines.push(leftRight(`  ${labelMetodo(item.metodo_pago)}:`, `-${money(item.monto)}`, ctx.width));
-    }
-    const proveedor = isRecord(item.proveedor) ? item.proveedor : undefined;
-    if (proveedor?.nombre) lines.push(`  Prov: ${text(proveedor.nombre)}`);
-    if (item.observacion) lines.push(`  Obs: ${text(item.observacion)}`);
-  }
 
   renderExpenseSummary(lines, gastos, ctx);
   lines.push(ctx.sep2);
@@ -713,6 +699,84 @@ function renderDiscountSummary(lines: string[], data: ThermalDocumentPayload, ct
   lines.push(ctx.sep);
   lines.push(escBold(true) + leftRight('TOTAL DCTOS:', `-${money(totalDesc + totalCort)}`, ctx.width) + escBold(false));
   lines.push('');
+}
+
+/**
+ * Un egreso por fila para que quien recibe el arqueo revise de un vistazo el
+ * concepto, en qué categoría lo metieron, con qué método salió y cuánto.
+ *
+ * 80mm: CONCEPTO CATEGORIA METODO VALOR en una sola línea. El valor va a la
+ * derecha con el ancho del monto más largo: antes la fila era 30+1+7+1+monto y
+ * un $1.000.000 sumaba 49 columnas, así que el último 0 caía solo en la línea
+ * siguiente.
+ * 58mm: cuatro columnas no caben legibles (la categoría quedaría en 7 letras):
+ * concepto y valor arriba, categoría y método debajo.
+ */
+function renderExpenseRows(lines: string[], items: Row[], ctx: Ctx): void {
+  const valores = items.map(item => money(item.monto));
+  const valorW = Math.max('VALOR'.length, ...valores.map(valor => valor.length));
+
+  if (ctx.width >= 42) {
+    const metodoW = 8;
+    const categoriaW = 11;
+    const conceptoW = Math.max(8, ctx.width - valorW - metodoW - categoriaW - 3);
+    const fila = (concepto: string, categoria: string, metodo: string, valor: string) =>
+      `${concepto.padEnd(conceptoW)} ${categoria.padEnd(categoriaW)} ${metodo.padEnd(metodoW)} ${valor.padStart(valorW)}`;
+    lines.push(fila('CONCEPTO', 'CATEGORIA', 'METODO', 'VALOR'));
+    lines.push(ctx.sep);
+    items.forEach((item, i) => {
+      lines.push(fila(
+        text(item.concepto).trim().substring(0, conceptoW),
+        recortarPalabras(text(item.categoria).trim() || '-', categoriaW),
+        metodoCorto(item.metodo_pago, metodoW),
+        valores[i],
+      ));
+      renderExpenseNotes(lines, item, ctx);
+    });
+    return;
+  }
+
+  const conceptoW = ctx.width - valorW - 1;
+  lines.push(`${'CONCEPTO'.padEnd(conceptoW)} ${'VALOR'.padStart(valorW)}`);
+  lines.push('  Categoria - Metodo');
+  lines.push(ctx.sep);
+  items.forEach((item, i) => {
+    lines.push(`${text(item.concepto).trim().substring(0, conceptoW).padEnd(conceptoW)} ${valores[i].padStart(valorW)}`);
+    const metodo = labelMetodo(item.metodo_pago);
+    const categoriaW = Math.max(6, ctx.width - 5 - metodo.length);
+    const categoria = recortarPalabras(text(item.categoria).trim() || 'Sin categoria', categoriaW);
+    lines.push(`  ${categoria} - ${metodo}`.substring(0, ctx.width));
+    renderExpenseNotes(lines, item, ctx);
+  });
+}
+
+/** Proveedor y observación debajo del egreso, envueltos por palabras (nunca más anchos que el rollo). */
+function renderExpenseNotes(lines: string[], item: Row, ctx: Ctx): void {
+  const proveedor = isRecord(item.proveedor) ? item.proveedor : undefined;
+  if (proveedor?.nombre) pushWrapped(lines, 'Prov', proveedor.nombre, ctx);
+  if (item.observacion) pushWrapped(lines, 'Obs', item.observacion, ctx);
+}
+
+/** El método en `width` columnas: "Transferencia" pasa a "Transf.", "Tarjeta debito" a "Tarjeta". */
+function metodoCorto(raw: unknown, width: number): string {
+  const label = labelMetodo(raw);
+  if (label.length <= width) return label;
+  if (label.toLowerCase() === 'transferencia') return 'Transf.';
+  const primera = label.split(' ')[0];
+  return primera.length <= width ? primera : `${label.substring(0, width - 1)}.`;
+}
+
+/**
+ * Recorta en un límite de palabra si puede ("Insumos / Materia prima" a 11 →
+ * "Insumos", no "Insumos / M") y sin dejar separadores colgando al final.
+ */
+function recortarPalabras(value: string, width: number): string {
+  if (value.length <= width) return value;
+  const corte = value.substring(0, width);
+  const espacio = value.charAt(width) === ' ' ? width : corte.lastIndexOf(' ');
+  const base = espacio >= Math.ceil(width / 2) ? corte.substring(0, espacio) : corte;
+  // "Suministros (aseo" no: un paréntesis que no alcanza a cerrarse sale entero.
+  return base.replace(/\s*\([^)]*$/, '').replace(/[\s/,;:(.-]+$/, '') || corte;
 }
 
 function renderExpenseSummary(lines: string[], gastos: Row | undefined, ctx: Ctx): void {

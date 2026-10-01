@@ -5,6 +5,7 @@ import {
   renderCorreccion,
   renderFactura,
   renderFacturasTurno,
+  renderGastosTurno,
   renderPrecuenta,
   renderReservasDia,
   renderTomaInventario,
@@ -785,5 +786,46 @@ assert.match(fiscalLargo, /^ *Caribe SAS - NIT 900123456-7 *$/m, 'el adquirente 
 for (const linea of sinMarcas(fiscalLargo).split('\n')) {
   if (!linea.includes('\x1E')) assert.ok(linea.length <= 32, `linea de ${linea.length} > 32 col: "${linea}"`);
 }
+
+// ── Egresos del turno: concepto, categoria, metodo y valor por fila ─────────
+// Quien recibe el arqueo revisa en que categoria y con que metodo se paso cada
+// gasto. La fila vieja era 30+1+7+1+monto: con $1.000.000 sumaba 49 columnas en
+// 80mm y el ultimo 0 caia solo en la linea siguiente.
+const egresos = {
+  cajero: 'Niria',
+  fecha_cierre: '2026-09-30T23:10:00Z',
+  gastos: {
+    total: 1356500,
+    por_metodo: [{ metodo: 'efectivo', total: 106500 }, { metodo: 'transferencia', total: 1250000 }],
+    items: [
+      { concepto: 'Hielo de la esquina', monto: 12000, metodo_pago: 'efectivo', categoria: 'Insumos / Materia prima' },
+      { concepto: 'Pago arriendo local octubre', monto: 1250000, metodo_pago: 'transferencia', categoria: 'Arriendo', proveedor: { nombre: 'Inmobiliaria del Caribe SAS' } },
+      { concepto: 'Bolsas y servilletas', monto: 94500, metodo_pago: 'efectivo', categoria: 'Suministros (aseo, desechables)', observacion: 'Se compraron en el D1 porque el proveedor no llego a tiempo' },
+      { concepto: 'Propina domiciliario', monto: 5000, metodo_pago: 'nequi', categoria: null },
+    ],
+  },
+};
+const egresos80 = sinMarcas(renderGastosTurno(egresos, { now, columns: 48 })).split('\n');
+assert.ok(egresos80.some((l) => /^CONCEPTO +CATEGORIA +METODO +VALOR$/.test(l)), 'encabezado de cuatro columnas en 80mm');
+const filaMillon = egresos80.find((l) => l.startsWith('Pago arriendo'));
+assert.ok(filaMillon.endsWith('$1.250.000'), `el millon cierra la fila sin partirse: "${filaMillon}"`);
+assert.match(filaMillon, /Arriendo +Transf\. +\$1\.250\.000$/);
+const filaHielo = egresos80.find((l) => l.startsWith('Hielo'));
+assert.equal(filaHielo.length, 48, 'el valor queda alineado a la derecha');
+assert.match(filaHielo, / Insumos +Efectivo +\$12\.000$/, 'la categoria se recorta en una palabra, sin "/ M" colgando');
+assert.match(egresos80.find((l) => l.startsWith('Bolsas')), / Suministros Efectivo /);
+assert.match(egresos80.find((l) => l.startsWith('Propina')), / - +Nequi /, 'sin categoria queda un guion');
+assert.ok(egresos80.includes('  Prov: Inmobiliaria del Caribe SAS'));
+
+const egresos58 = sinMarcas(renderGastosTurno(egresos, { now, columns: 32 })).split('\n');
+assert.ok(egresos58.includes('Pago arriendo local o $1.250.000'), 'en 58mm el concepto y el valor van arriba');
+assert.ok(egresos58.includes('  Arriendo - Transferencia'), 'y la categoria con el metodo debajo');
+assert.ok(egresos58.includes('  Suministros - Efectivo'), 'un parentesis que no cabe no queda abierto');
+assert.ok(egresos58.includes('  Sin categoria - Nequi'));
+
+for (const [w, lineas] of [[48, egresos80], [32, egresos58]]) {
+  for (const linea of lineas) assert.ok(linea.length <= w, `egresos: linea de ${linea.length} > ${w} col: "${linea}"`);
+}
+assert.equal(renderGastosTurno({ gastos: { items: [] } }, { now, columns: 48 }), '', 'sin egresos no hay tirilla');
 
 console.log('OK — rayas justas, total en negrilla, metodo legible y avance al corte (32 y 48 col)');

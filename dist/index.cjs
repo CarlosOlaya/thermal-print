@@ -896,21 +896,8 @@ function renderGastosTurno(data, options = {}) {
   lines.push(leftRight("Cajero:", text(data.cajero), ctx.width));
   lines.push(leftRight("Cierre:", dateTime(data.fecha_cierre || ctx.now, ctx), ctx.width));
   lines.push(ctx.sep);
-  lines.push(ctx.width >= 42 ? "CONCEPTO                          METODO  MONTO" : "CONCEPTO");
+  renderExpenseRows(lines, items, ctx);
   lines.push(ctx.sep);
-  for (const item of items) {
-    if (ctx.width >= 42) {
-      const concepto = text(item.concepto).substring(0, 30).padEnd(30, " ");
-      const metodo = text(item.metodo_pago || "efec").substring(0, 7).padEnd(7, " ");
-      lines.push(`${concepto} ${metodo} ${money(item.monto)}`);
-    } else {
-      lines.push(text(item.concepto).substring(0, ctx.width));
-      lines.push(leftRight(`  ${labelMetodo(item.metodo_pago)}:`, `-${money(item.monto)}`, ctx.width));
-    }
-    const proveedor = isRecord(item.proveedor) ? item.proveedor : void 0;
-    if (proveedor?.nombre) lines.push(`  Prov: ${text(proveedor.nombre)}`);
-    if (item.observacion) lines.push(`  Obs: ${text(item.observacion)}`);
-  }
   renderExpenseSummary(lines, gastos, ctx);
   lines.push(ctx.sep2);
   lines.push(center("** SOLO PARA CONTROL INTERNO **", ctx.width));
@@ -1350,6 +1337,59 @@ function renderDiscountSummary(lines, data, ctx) {
   lines.push(ctx.sep);
   lines.push(escBold(true) + leftRight("TOTAL DCTOS:", `-${money(totalDesc + totalCort)}`, ctx.width) + escBold(false));
   lines.push("");
+}
+function renderExpenseRows(lines, items, ctx) {
+  const valores = items.map((item) => money(item.monto));
+  const valorW = Math.max("VALOR".length, ...valores.map((valor) => valor.length));
+  if (ctx.width >= 42) {
+    const metodoW = 8;
+    const categoriaW = 11;
+    const conceptoW2 = Math.max(8, ctx.width - valorW - metodoW - categoriaW - 3);
+    const fila = (concepto, categoria, metodo, valor) => `${concepto.padEnd(conceptoW2)} ${categoria.padEnd(categoriaW)} ${metodo.padEnd(metodoW)} ${valor.padStart(valorW)}`;
+    lines.push(fila("CONCEPTO", "CATEGORIA", "METODO", "VALOR"));
+    lines.push(ctx.sep);
+    items.forEach((item, i) => {
+      lines.push(fila(
+        text(item.concepto).trim().substring(0, conceptoW2),
+        recortarPalabras(text(item.categoria).trim() || "-", categoriaW),
+        metodoCorto(item.metodo_pago, metodoW),
+        valores[i]
+      ));
+      renderExpenseNotes(lines, item, ctx);
+    });
+    return;
+  }
+  const conceptoW = ctx.width - valorW - 1;
+  lines.push(`${"CONCEPTO".padEnd(conceptoW)} ${"VALOR".padStart(valorW)}`);
+  lines.push("  Categoria - Metodo");
+  lines.push(ctx.sep);
+  items.forEach((item, i) => {
+    lines.push(`${text(item.concepto).trim().substring(0, conceptoW).padEnd(conceptoW)} ${valores[i].padStart(valorW)}`);
+    const metodo = labelMetodo(item.metodo_pago);
+    const categoriaW = Math.max(6, ctx.width - 5 - metodo.length);
+    const categoria = recortarPalabras(text(item.categoria).trim() || "Sin categoria", categoriaW);
+    lines.push(`  ${categoria} - ${metodo}`.substring(0, ctx.width));
+    renderExpenseNotes(lines, item, ctx);
+  });
+}
+function renderExpenseNotes(lines, item, ctx) {
+  const proveedor = isRecord(item.proveedor) ? item.proveedor : void 0;
+  if (proveedor?.nombre) pushWrapped(lines, "Prov", proveedor.nombre, ctx);
+  if (item.observacion) pushWrapped(lines, "Obs", item.observacion, ctx);
+}
+function metodoCorto(raw, width) {
+  const label = labelMetodo(raw);
+  if (label.length <= width) return label;
+  if (label.toLowerCase() === "transferencia") return "Transf.";
+  const primera = label.split(" ")[0];
+  return primera.length <= width ? primera : `${label.substring(0, width - 1)}.`;
+}
+function recortarPalabras(value, width) {
+  if (value.length <= width) return value;
+  const corte = value.substring(0, width);
+  const espacio = value.charAt(width) === " " ? width : corte.lastIndexOf(" ");
+  const base = espacio >= Math.ceil(width / 2) ? corte.substring(0, espacio) : corte;
+  return base.replace(/\s*\([^)]*$/, "").replace(/[\s/,;:(.-]+$/, "") || corte;
 }
 function renderExpenseSummary(lines, gastos, ctx) {
   if (!gastos || num(gastos.total) <= 0) return;
