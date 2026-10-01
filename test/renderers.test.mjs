@@ -831,4 +831,102 @@ for (const [w, lineas] of [[48, egresos80], [32, egresos58]]) {
 }
 assert.equal(renderGastosTurno({ gastos: { items: [] } }, { now, columns: 48 }), '', 'sin egresos no hay tirilla');
 
+// ── Relevo de turno: el cierre con su acta de entrega ───────────────────────
+// El acta (quien entrega, quien recibe, retiro y efectivo entregado, con firmas)
+// solo existia en el texto que armaba el API, y el gateway lo pisaba al
+// renderizar: en vivo nunca llegaba al papel. Ahora la dibuja renderCierreCaja:
+// sale al ancho del rollo, con el resto del cierre y los egresos.
+const relevoCierre = {
+  tenant_nombre: 'Pan Comido',
+  tipo_cierre: 'relevo',
+  cajero: 'Ana Perez',
+  fecha_apertura: '2026-07-05T13:00:00Z',
+  fecha_cierre: '2026-07-05T19:00:00Z',
+  total_ventas: 100000,
+  total_propinas: 5000,
+  efectivo_inicial: 20000,
+  efectivo_esperado: 125000,
+  efectivo_contado: 125000,
+  diferencia: 0,
+  metodos_desglose: [{ clave: 'efectivo', venta: 100000, servicio: 5000 }],
+  num_facturas_cerradas: 4,
+  relevo: { recibido_por_nombre: 'Luis Gomez', retiro_monto: 75000, retiro_concepto: 'Consignacion banco', efectivo_entregado: 50000 },
+};
+for (const w of [32, 48]) {
+  const crudo = renderCierreCaja(relevoCierre, { now, columns: w });
+  const plano = sinMarcas(crudo);
+  const lineas = plano.split('\n');
+  const donde = (patron) => lineas.findIndex((l) => patron.test(l));
+  assert.match(crudo, /RELEVO DE TURNO/, `el cierre de un relevo se titula relevo (${w} col)`);
+  assert.doesNotMatch(crudo, /CIERRE DE CAJA/, `y no dice cierre de caja (${w} col)`);
+  assert.match(crudo, /^Relevo: +/m, `la hora lleva su etiqueta (${w} col)`);
+  assert.doesNotMatch(crudo, /^Cierre:/m);
+  const iTitulo = donde(/^ *ACTA DE ENTREGA DE CAJA$/);
+  assert.ok(iTitulo > 0, `el acta tiene su titulo (${w} col)`);
+  assert.equal(lineas[iTitulo].length - lineas[iTitulo].trimStart().length, Math.floor((w - 23) / 2), `y va centrado (${w} col)`);
+  assert.match(crudo, /^Entrega: +Ana Perez$/m, `quien entrega (${w} col)`);
+  assert.match(crudo, /^Recibe: +Luis Gomez$/m, `quien recibe (${w} col)`);
+  assert.match(crudo, /^Efectivo contado: +\$125\.000$/m);
+  assert.match(crudo, /^- Retiro: +-\$75\.000$/m);
+  assert.ok(lineas.includes('  (Consignacion banco)'), `el concepto del retiro, entre parentesis (${w} col)`);
+  assert.match(plano, /^EFECTIVO ENTREGADO: +\$50\.000$/m);
+  assert.ok(crudo.includes(`${escBold(true)}EFECTIVO ENTREGADO:`), `lo que queda en la caja va en negrilla (${w} col)`);
+  assert.match(crudo, /Firma entrega +Firma recibe/, `los rotulos de las dos firmas (${w} col)`);
+  // Orden: pedidos, acta, aviso de control interno; y papel para firmar entre medio.
+  assert.ok(donde(/^RESUMEN DE PEDIDOS/) < iTitulo, `el acta va despues del resumen de pedidos (${w} col)`);
+  assert.ok(iTitulo < donde(/SOLO PARA CONTROL INTERNO/), `y antes del aviso final (${w} col)`);
+  const iRaya = donde(/^ *_+ +_+$/);
+  assert.ok(iRaya > 0, `hay rayas para firmar (${w} col)`);
+  assert.deepEqual(lineas.slice(iRaya - 3, iRaya), ['', '', ''], `tres renglones libres para firmar (${w} col)`);
+  // Una raya entre secciones: el acta no agrega rayas pegadas.
+  for (let i = 1; i < lineas.length; i++) {
+    assert.ok(!(esRaya(lineas[i - 1]) && esRaya(lineas[i])), `rayas pegadas en el relevo (${w} col), linea ${i}`);
+  }
+  for (const linea of lineas) assert.ok(linea.length <= w, `relevo: linea de ${linea.length} > ${w} col: "${linea}"`);
+  assert.match(crudo, /\n{5}$/, `el relevo termina con el avance al corte (${w} col)`);
+}
+
+// Un nombre o un concepto que no caben en el rollo bajan a la linea siguiente.
+// (El cajero mide 24: cabe en la fila "Cajero:" del encabezado, pero no en "Entrega:".)
+const relevoLargo = renderCierreCaja({
+  ...relevoCierre,
+  cajero: 'Luis Fernando Castellano',
+  relevo: {
+    recibido_por_nombre: 'Maria Fernanda Rodriguez Gomez',
+    retiro_monto: 75000,
+    retiro_concepto: 'Consignacion en el banco Bancolombia a la cuenta de ahorros del restaurante',
+    efectivo_entregado: 50000,
+  },
+}, { now, columns: 32 });
+const lineasLargo = sinMarcas(relevoLargo).split('\n');
+assert.ok(lineasLargo.includes('Entrega:') && lineasLargo.includes('  Luis Fernando Castellano'), 'quien entrega baja a su renglon');
+assert.ok(lineasLargo.includes('Recibe:') && lineasLargo.includes('  Maria Fernanda Rodriguez Gomez'), 'quien recibe baja a su renglon');
+const iConcepto = lineasLargo.findIndex((l) => l.startsWith('  (Consignacion'));
+assert.deepEqual(
+  lineasLargo.slice(iConcepto, iConcepto + 3),
+  ['  (Consignacion en el banco', '   Bancolombia a la cuenta de', '   ahorros del restaurante)'],
+  'el concepto se envuelve y su parentesis se cierra al final',
+);
+for (const linea of lineasLargo) assert.ok(linea.length <= 32, `relevo largo: linea de ${linea.length} > 32 col: "${linea}"`);
+
+// Sin retiro no hay linea de retiro; sin el detalle del relevo, el titulo sin acta.
+const relevoSinRetiro = renderCierreCaja({
+  ...relevoCierre,
+  relevo: { recibido_por_nombre: 'Luis Gomez', retiro_monto: 0, retiro_concepto: null, efectivo_entregado: 125000 },
+}, { now, columns: 48 });
+assert.doesNotMatch(relevoSinRetiro, /- Retiro:/);
+assert.match(sinMarcas(relevoSinRetiro), /^EFECTIVO ENTREGADO: +\$125\.000$/m);
+const relevoSinActa = renderCierreCaja({ ...relevoCierre, relevo: undefined }, { now, columns: 48 });
+assert.match(relevoSinActa, /RELEVO DE TURNO/);
+assert.doesNotMatch(relevoSinActa, /ACTA DE ENTREGA|Firma entrega/);
+
+// El cierre normal no se contamina: ni titulo de relevo, ni acta, ni firmas,
+// aunque el payload traiga el detalle de un relevo.
+for (const tipo of [undefined, 'cierre']) {
+  const normal = renderCierreCaja({ ...relevoCierre, tipo_cierre: tipo }, { now, columns: 48 });
+  assert.match(normal, /CIERRE DE CAJA/);
+  assert.doesNotMatch(normal, /RELEVO DE TURNO|ACTA DE ENTREGA|Firma entrega|^Relevo:/m, `el cierre normal (${tipo}) no lleva acta`);
+}
+assert.doesNotMatch(cierre, /ACTA DE ENTREGA|RELEVO DE TURNO/);
+
 console.log('OK — rayas justas, total en negrilla, metodo legible y avance al corte (32 y 48 col)');

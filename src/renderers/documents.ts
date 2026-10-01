@@ -114,7 +114,11 @@ export function renderDatosCliente(data: ThermalDocumentPayload, options: Therma
 
 export function renderCierreCaja(data: ThermalDocumentPayload, options: ThermalRenderOptions = {}): string {
   const ctx = context(options);
-  const lines = header(data, 'CIERRE DE CAJA', ctx);
+  // Relevo de turno: el cajero entrega la caja a quien lo reemplaza sin detener la
+  // operación. Es el mismo cierre, titulado como relevo y con su acta de entrega.
+  const esRelevo = text(data.tipo_cierre) === 'relevo';
+  const relevo = isRecord(data.relevo) ? data.relevo : undefined;
+  const lines = header(data, esRelevo ? 'RELEVO DE TURNO' : 'CIERRE DE CAJA', ctx);
   const metodos = arr(data.metodos_desglose);
   const tieneDesglose = metodos.length > 0;
   const gastos = isRecord(data.gastos) ? data.gastos : undefined;
@@ -123,7 +127,7 @@ export function renderCierreCaja(data: ThermalDocumentPayload, options: ThermalR
 
   lines.push(leftRight('Cajero:', text(data.cajero), ctx.width));
   if (data.fecha_apertura) lines.push(leftRight('Apertura:', dateTime(data.fecha_apertura, ctx), ctx.width));
-  lines.push(leftRight('Cierre:', dateTime(data.fecha_cierre || ctx.now, ctx), ctx.width));
+  lines.push(leftRight(esRelevo ? 'Relevo:' : 'Cierre:', dateTime(data.fecha_cierre || ctx.now, ctx), ctx.width));
   lines.push(ctx.sep);
 
   lines.push(escBold(true) + 'VENTAS POR METODO DE PAGO' + escBold(false));
@@ -178,6 +182,7 @@ export function renderCierreCaja(data: ThermalDocumentPayload, options: ThermalR
   renderCashSummary(lines, data, metodos, gastos, ingresosCaja, domicilios, ctx);
   renderOrderSummary(lines, data, ctx);
   renderDeliverySummary(lines, domicilios, ctx);
+  if (esRelevo && relevo) renderActaEntrega(lines, data, relevo, ctx);
 
   if (data.observaciones) {
     lines.push(ctx.sep);
@@ -853,6 +858,56 @@ function renderDeliverySummary(lines: string[], dom: Row | undefined, ctx: Ctx):
       lines.push(`  (${text(liq.metodo_salida)})`);
     }
   }
+}
+
+/**
+ * Acta de entrega de caja del relevo: quién entrega, quién recibe, el efectivo
+ * contado, el retiro (alivio o consignación) y lo que queda en la caja, con el
+ * espacio para las dos firmas. Va al ancho del rollo: un nombre o un concepto que
+ * no cabe baja a la línea siguiente en vez de salirse del papel.
+ */
+function renderActaEntrega(lines: string[], data: ThermalDocumentPayload, relevo: Row, ctx: Ctx): void {
+  lines.push(ctx.sep2);
+  lines.push(escBold(true) + center('ACTA DE ENTREGA DE CAJA', ctx.width) + escBold(false));
+  lines.push(ctx.sep);
+  pushLabelValue(lines, 'Entrega:', data.cajero, ctx);
+  pushLabelValue(lines, 'Recibe:', relevo.recibido_por_nombre, ctx);
+  lines.push(leftRight('Efectivo contado:', money(data.efectivo_contado), ctx.width));
+  if (num(relevo.retiro_monto) > 0) {
+    lines.push(leftRight('- Retiro:', `-${money(relevo.retiro_monto)}`, ctx.width));
+    const concepto = text(relevo.retiro_concepto).replace(/\s+/g, ' ').trim();
+    if (concepto) {
+      // El concepto va entre paréntesis y, si no cabe, sigue en los renglones de abajo.
+      const partes = wrapWords(concepto, ctx.width - 4);
+      partes.forEach((parte, i) => {
+        lines.push(`${i === 0 ? '  (' : '   '}${parte}${i === partes.length - 1 ? ')' : ''}`);
+      });
+    }
+  }
+  lines.push(ctx.sep);
+  lines.push(escBold(true) + leftRight('EFECTIVO ENTREGADO:', money(relevo.efectivo_entregado), ctx.width) + escBold(false));
+  pushFirmas(lines, ctx);
+}
+
+/** "Etiqueta:      valor" en una línea; si no cabe, el valor baja con sangría. */
+function pushLabelValue(lines: string[], label: string, value: unknown, ctx: Ctx): void {
+  const limpio = text(value).replace(/\s+/g, ' ').trim();
+  if (label.length + 1 + limpio.length <= ctx.width) {
+    lines.push(leftRight(label, limpio, ctx.width));
+    return;
+  }
+  lines.push(label);
+  for (const parte of wrapWords(limpio, ctx.width - 2)) lines.push(`  ${parte}`);
+}
+
+/** Espacio para firmar y dos rayas con su rótulo, repartidas en el ancho del rollo. */
+function pushFirmas(lines: string[], ctx: Ctx): void {
+  const ancho = Math.floor((ctx.width - 6) / 2);
+  const [entrega, recibe] = ancho >= 13 ? ['Firma entrega', 'Firma recibe'] : ['Entrega', 'Recibe'];
+  const centrar = (rotulo: string) => (' '.repeat(Math.max(0, Math.floor((ancho - rotulo.length) / 2))) + rotulo).padEnd(ancho);
+  lines.push('', '', '');
+  lines.push(`  ${'_'.repeat(ancho)}  ${'_'.repeat(ancho)}`);
+  lines.push(`  ${centrar(entrega)}  ${centrar(recibe)}`.trimEnd());
 }
 
 function header(data: ThermalDocumentPayload, title: string, ctx: Ctx): string[] {

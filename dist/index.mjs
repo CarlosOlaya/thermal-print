@@ -765,7 +765,9 @@ function renderDatosCliente(data, options = {}) {
 }
 function renderCierreCaja(data, options = {}) {
   const ctx = context(options);
-  const lines = header(data, "CIERRE DE CAJA", ctx);
+  const esRelevo = text(data.tipo_cierre) === "relevo";
+  const relevo = isRecord(data.relevo) ? data.relevo : void 0;
+  const lines = header(data, esRelevo ? "RELEVO DE TURNO" : "CIERRE DE CAJA", ctx);
   const metodos = arr(data.metodos_desglose);
   const tieneDesglose = metodos.length > 0;
   const gastos = isRecord(data.gastos) ? data.gastos : void 0;
@@ -773,7 +775,7 @@ function renderCierreCaja(data, options = {}) {
   const domicilios = isRecord(data.domicilios) ? data.domicilios : void 0;
   lines.push(leftRight("Cajero:", text(data.cajero), ctx.width));
   if (data.fecha_apertura) lines.push(leftRight("Apertura:", dateTime(data.fecha_apertura, ctx), ctx.width));
-  lines.push(leftRight("Cierre:", dateTime(data.fecha_cierre || ctx.now, ctx), ctx.width));
+  lines.push(leftRight(esRelevo ? "Relevo:" : "Cierre:", dateTime(data.fecha_cierre || ctx.now, ctx), ctx.width));
   lines.push(ctx.sep);
   lines.push(escBold(true) + "VENTAS POR METODO DE PAGO" + escBold(false));
   lines.push(ctx.sep);
@@ -823,6 +825,7 @@ function renderCierreCaja(data, options = {}) {
   renderCashSummary(lines, data, metodos, gastos, ingresosCaja, domicilios, ctx);
   renderOrderSummary(lines, data, ctx);
   renderDeliverySummary(lines, domicilios, ctx);
+  if (esRelevo && relevo) renderActaEntrega(lines, data, relevo, ctx);
   if (data.observaciones) {
     lines.push(ctx.sep);
     lines.push(`Obs: ${text(data.observaciones)}`);
@@ -1403,6 +1406,44 @@ function renderDeliverySummary(lines, dom, ctx) {
       lines.push(`  (${text(liq.metodo_salida)})`);
     }
   }
+}
+function renderActaEntrega(lines, data, relevo, ctx) {
+  lines.push(ctx.sep2);
+  lines.push(escBold(true) + center("ACTA DE ENTREGA DE CAJA", ctx.width) + escBold(false));
+  lines.push(ctx.sep);
+  pushLabelValue(lines, "Entrega:", data.cajero, ctx);
+  pushLabelValue(lines, "Recibe:", relevo.recibido_por_nombre, ctx);
+  lines.push(leftRight("Efectivo contado:", money(data.efectivo_contado), ctx.width));
+  if (num(relevo.retiro_monto) > 0) {
+    lines.push(leftRight("- Retiro:", `-${money(relevo.retiro_monto)}`, ctx.width));
+    const concepto = text(relevo.retiro_concepto).replace(/\s+/g, " ").trim();
+    if (concepto) {
+      const partes = wrapWords2(concepto, ctx.width - 4);
+      partes.forEach((parte, i) => {
+        lines.push(`${i === 0 ? "  (" : "   "}${parte}${i === partes.length - 1 ? ")" : ""}`);
+      });
+    }
+  }
+  lines.push(ctx.sep);
+  lines.push(escBold(true) + leftRight("EFECTIVO ENTREGADO:", money(relevo.efectivo_entregado), ctx.width) + escBold(false));
+  pushFirmas(lines, ctx);
+}
+function pushLabelValue(lines, label, value, ctx) {
+  const limpio = text(value).replace(/\s+/g, " ").trim();
+  if (label.length + 1 + limpio.length <= ctx.width) {
+    lines.push(leftRight(label, limpio, ctx.width));
+    return;
+  }
+  lines.push(label);
+  for (const parte of wrapWords2(limpio, ctx.width - 2)) lines.push(`  ${parte}`);
+}
+function pushFirmas(lines, ctx) {
+  const ancho = Math.floor((ctx.width - 6) / 2);
+  const [entrega, recibe] = ancho >= 13 ? ["Firma entrega", "Firma recibe"] : ["Entrega", "Recibe"];
+  const centrar = (rotulo) => (" ".repeat(Math.max(0, Math.floor((ancho - rotulo.length) / 2))) + rotulo).padEnd(ancho);
+  lines.push("", "", "");
+  lines.push(`  ${"_".repeat(ancho)}  ${"_".repeat(ancho)}`);
+  lines.push(`  ${centrar(entrega)}  ${centrar(recibe)}`.trimEnd());
 }
 function header(data, title, ctx) {
   const lines = [];
