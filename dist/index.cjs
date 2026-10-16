@@ -897,6 +897,7 @@ function renderCierreCaja(data, options = {}) {
   renderDiscountSummary(lines, data, ctx);
   renderExpenseSummary(lines, gastos, ctx);
   renderCashIncomeSummary(lines, ingresosCaja, ctx);
+  renderCarteraSummary(lines, isRecord(data.cartera) ? data.cartera : void 0, ctx);
   renderCashSummary(lines, data, metodos, gastos, ingresosCaja, domicilios, ctx);
   renderOrderSummary(lines, data, ctx);
   renderDeliverySummary(lines, domicilios, ctx);
@@ -1479,6 +1480,18 @@ function renderCashIncomeSummary(lines, ingresosCaja, ctx) {
   lines.push(escBold(true) + leftRight("TOTAL INGRESOS:", money(ingresosCaja.total_efectivo), ctx.width) + escBold(false));
   lines.push("");
 }
+function renderCarteraSummary(lines, cartera, ctx) {
+  if (!cartera || num(cartera.total) <= 0) return;
+  lines.push(escBold(true) + "RECAUDO DE CARTERA" + escBold(false));
+  lines.push(ctx.sep);
+  for (const metodo of arr(cartera.por_metodo)) {
+    if (num(metodo.total) > 0) lines.push(leftRight(`  ${labelMetodo(text(metodo.metodo))}:`, money(metodo.total), ctx.width));
+  }
+  lines.push(ctx.sep);
+  const abonos = num(cartera.num_abonos);
+  lines.push(escBold(true) + leftRight(abonos > 0 ? `TOTAL ABONOS (${abonos}):` : "TOTAL ABONOS:", money(cartera.total), ctx.width) + escBold(false));
+  lines.push("");
+}
 function renderCashSummary(lines, data, metodos, gastos, ingresosCaja, domicilios, ctx) {
   const efectivo = metodos.length ? metodos.find((m) => text(m.clave) === "efectivo") : void 0;
   const ventaEf = efectivo ? num(efectivo.venta) : num(data.total_efectivo);
@@ -1491,6 +1504,8 @@ function renderCashSummary(lines, data, metodos, gastos, ingresosCaja, domicilio
   lines.push(leftRight("+ Ventas:", money(ventaEf), ctx.width));
   lines.push(leftRight("+ Propinas:", money(servicioEf), ctx.width));
   if (num(ingresosCaja?.total_efectivo) > 0) lines.push(leftRight("+ Ingresos caja:", money(ingresosCaja?.total_efectivo), ctx.width));
+  const cartera = isRecord(data.cartera) ? data.cartera : void 0;
+  if (num(cartera?.efectivo) > 0) lines.push(leftRight("+ Abonos cartera:", money(cartera?.efectivo), ctx.width));
   if (num(gastosEf?.total) > 0) lines.push(leftRight("- Egresos:", `-${money(gastosEf?.total)}`, ctx.width));
   if (num(domicilios?.recaudado_efectivo) > 0) lines.push(leftRight("+ Domicilio:", money(domicilios?.recaudado_efectivo), ctx.width));
   if (num(domicilios?.liquidado_efectivo) > 0) lines.push(leftRight("- Liq. domicilio:", `-${money(domicilios?.liquidado_efectivo)}`, ctx.width));

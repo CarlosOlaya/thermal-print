@@ -991,4 +991,32 @@ const conFavor = sinMarcas(renderReciboAbono({ ...recibo, saldo_a_favor: 5000, r
 assert.match(conFavor, /^Saldo a favor: +\$5\.000$/m);
 assert.match(conFavor, /\(REIMPRESION\)/);
 
+// El cierre con abonos de cartera: sección propia (recaudo, no venta) y el
+// efectivo abonado suma al esperado del resumen de efectivo.
+const cierreConCartera = {
+  ...relevoCierre,
+  tipo_cierre: 'cierre',
+  relevo: undefined,
+  efectivo_esperado: 175000,
+  cartera: {
+    total: 70000,
+    efectivo: 50000,
+    por_metodo: [{ metodo: 'efectivo', total: 50000 }, { metodo: 'nequi', total: 20000 }],
+    num_abonos: 3,
+  },
+};
+for (const columns of [32, 48]) {
+  const t = sinMarcas(renderCierreCaja(cierreConCartera, { now, columns }));
+  assert.match(t, /^RECAUDO DE CARTERA$/m);
+  assert.match(t, /^ {2}Nequi: +\$20\.000$/m);
+  assert.match(t, /^TOTAL ABONOS \(3\): +\$70\.000$/m);
+  assert.match(t, /^\+ Abonos cartera: +\$50\.000$/m);
+  // Es recaudo: no aparece entre las ventas por método
+  const ventas = t.split('VENTAS POR METODO DE PAGO')[1].split('TOTAL VENTAS')[0];
+  assert.doesNotMatch(ventas, /Nequi/);
+  for (const linea of t.split('\n')) assert.ok(linea.length <= columns, `linea de ${linea.length} > ${columns}: ${linea}`);
+}
+// Sin abonos el cierre no cambia
+assert.doesNotMatch(sinMarcas(renderCierreCaja({ ...cierreConCartera, cartera: undefined }, { now, columns: 48 })), /CARTERA|Abonos/);
+
 console.log('OK — rayas justas, total en negrilla, metodo legible y avance al corte (32 y 48 col)');
