@@ -60,11 +60,14 @@ export function renderFactura(factura: FacturaCerradaPayload, options: ThermalRe
   renderPayments(pagos, factura, width);
   renderCambio(pagos, factura, width);
 
+  const credito: string[] = [];
+  renderCredito(credito, factura, width);
+
   // Una sola raya ENTRE secciones, y solo entre las que tienen contenido. Antes
   // cada bloque abría y cerraba la suya: la tirilla acumulaba rayas pegadas
   // (---- seguida de ====) que gastaban papel sin separar nada nuevo.
   const sep = '-'.repeat(width);
-  const lines = unirSecciones([encabezado, datos, detalle, totales, pagos], sep);
+  const lines = unirSecciones([encabezado, datos, detalle, totales, pagos, credito], sep);
 
   // Con documento electrónico ACEPTADO la tirilla es fiscal (número DIAN +
   // CUFE/CUDE + QR); sin él, sigue siendo control interno. La doble raya queda
@@ -521,6 +524,33 @@ function renderCambio(lines: string[], factura: FacturaCerradaPayload, width: nu
   if (!(recibido > 0) || !(cambio >= 0) || cambio > recibido) return;
   lines.push(leftRight('EFECTIVO RECIBIDO:', `$${formatMoney(recibido)}`, width));
   lines.push(leftRight('CAMBIO:', `$${formatMoney(cambio)}`, width));
+}
+
+/**
+ * Cartera: la parte que quedó debiendo, cuándo vence y cuánto debe en total,
+ * con la firma de quien la reconoce. Es el comprobante del fiado; la factura
+ * electrónica ya declaró la forma de pago a crédito en su propio bloque.
+ */
+function renderCredito(lines: string[], factura: FacturaCerradaPayload, width: number): void {
+  const credito = factura.credito;
+  const monto = Number(credito?.monto) || 0;
+  if (!credito || monto <= 0) return;
+  lines.push(negrilla(leftRight('A CREDITO:', `$${formatMoney(monto)}`, width)));
+  if (credito.cliente) lines.push(`A nombre de: ${sanitizeText(credito.cliente)}`);
+  const vence = fechaCorta(credito.vencimiento);
+  if (vence) lines.push(leftRight('Vence:', vence, width));
+  if (typeof credito.saldo_cliente === 'number' && credito.saldo_cliente > 0) {
+    // Etiqueta corta: en 58 mm (32 columnas) cabe con un saldo de millones
+    lines.push(leftRight('Debe en total:', `$${formatMoney(credito.saldo_cliente)}`, width));
+  }
+  lines.push('');
+  lines.push(`Firma: ${'_'.repeat(Math.max(10, width - 8))}`);
+}
+
+/** YYYY-MM-DD → dd/mm/aaaa, sin pasar por la zona del servidor */
+function fechaCorta(iso: unknown): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : '';
 }
 
 function renderReason(lines: string[], reason: unknown, prefix = '      Motivo: '): void {

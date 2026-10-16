@@ -7,6 +7,7 @@ import {
   renderFacturasTurno,
   renderGastosTurno,
   renderPrecuenta,
+  renderReciboAbono,
   renderReservasDia,
   renderTomaInventario,
   renderVentasPLU,
@@ -928,5 +929,66 @@ for (const tipo of [undefined, 'cierre']) {
   assert.doesNotMatch(normal, /RELEVO DE TURNO|ACTA DE ENTREGA|Firma entrega|^Relevo:/m, `el cierre normal (${tipo}) no lleva acta`);
 }
 assert.doesNotMatch(cierre, /ACTA DE ENTREGA|RELEVO DE TURNO/);
+
+// ── Cartera (4.14.0): el pedido fiado y el recibo de abono ──
+const fiado = {
+  numero_factura: 'PED-00195',
+  tenant_nombre: 'Clover Brew',
+  mesa_nombre: 'Mesa 3',
+  mesero: 'Ana',
+  cliente: 'Juan Perez',
+  items: [{ nombre: 'Latte', cantidad: 2, precio_unitario: 6000 }],
+  subtotal: 12000,
+  total: 12000,
+  metodo_pago: 'credito',
+  pagos: [{ metodo: 'credito', monto: 12000 }],
+  credito: { monto: 12000, vencimiento: '2026-10-25', saldo_cliente: 1250000 },
+};
+for (const columns of [32, 48]) {
+  const t = renderFactura(fiado, { now, columns });
+  const plano = sinMarcas(t);
+  assert.match(plano, /^A CREDITO: +\$12\.000$/m, `bloque de credito (${columns} col)`);
+  assert.ok(t.includes(`${escBold(true)}${plano.split('\n').find((l) => l.startsWith('A CREDITO'))}${escBold(false)}`), 'el monto fiado va en negrilla');
+  assert.match(plano, /^Vence: +25\/10\/2026$/m);
+  assert.match(plano, /^Debe en total: +\$1\.250\.000$/m);
+  assert.match(plano, /^Firma: _{10,}$/m);
+  for (const linea of plano.split('\n')) assert.ok(linea.length <= columns, `linea de ${linea.length} > ${columns}: ${linea}`);
+}
+// Sin credito la tirilla no cambia: ni bloque ni firma; un credito en 0 tampoco se imprime
+assert.doesNotMatch(sinMarcas(renderFactura({ ...fiado, credito: undefined }, { now, columns: 48 })), /A CREDITO|Firma:|Debe en total/);
+assert.doesNotMatch(sinMarcas(renderFactura({ ...fiado, credito: { monto: 0 } }, { now, columns: 48 })), /A CREDITO/);
+
+const recibo = {
+  tenant_nombre: 'Clover Brew',
+  nit: '900123456-7',
+  numero: 'RC-000123',
+  fecha: '2026-10-16T15:30:00Z',
+  cliente: 'Juan Perez',
+  cliente_telefono: '3001234567',
+  monto: 50000,
+  metodo: 'nequi',
+  referencia: 'M123456',
+  aplicaciones: [{ pedido: 'PED-00180', monto: 30000 }, { pedido: 'PED-00195', monto: 12000 }, { monto: 8000 }],
+  saldo_pendiente: 0,
+  saldo_a_favor: 0,
+  recibido_por: 'Carlos',
+};
+for (const columns of [32, 48]) {
+  const r = sinMarcas(renderReciboAbono(recibo, { now, columns }));
+  assert.match(r, /RECIBO DE ABONO/);
+  assert.match(r, /RC-000123/);
+  assert.match(r, /^VALOR RECIBIDO: +\$50\.000$/m);
+  assert.match(r, /^Metodo: +Nequi$/m);
+  assert.match(r, /^ {2}PED-00180 +\$30\.000$/m);
+  assert.match(r, /^ {2}Saldo anterior +\$8\.000$/m);
+  assert.match(r, /^SALDO PENDIENTE: +\$0$/m);
+  assert.doesNotMatch(r, /Saldo a favor/, 'sin saldo a favor no se imprime');
+  assert.match(r, /^Recibio: Carlos$/m);
+  assert.doesNotMatch(r, /={3,}/, 'compacto: sin dobles rayas');
+  for (const linea of r.split('\n')) assert.ok(linea.length <= columns, `linea de ${linea.length} > ${columns}: ${linea}`);
+}
+const conFavor = sinMarcas(renderReciboAbono({ ...recibo, saldo_a_favor: 5000, reimpresion: true }, { now, columns: 48 }));
+assert.match(conFavor, /^Saldo a favor: +\$5\.000$/m);
+assert.match(conFavor, /\(REIMPRESION\)/);
 
 console.log('OK — rayas justas, total en negrilla, metodo legible y avance al corte (32 y 48 col)');

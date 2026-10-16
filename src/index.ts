@@ -1,4 +1,5 @@
 export type {
+  CreditoTicket,
   FacturaCerradaPayload,
   FacturaElectronicaTicket,
   ItemEvento,
@@ -7,6 +8,7 @@ export type {
   ThermalComandaPayload,
   ThermalDocumentPayload,
   ThermalInventarioItem,
+  ThermalReciboAbonoPayload,
   ThermalRenderOptions,
   ThermalReservaItem,
   ThermalReservasDiaPayload,
@@ -36,6 +38,7 @@ export {
   renderGastosTurno,
   renderNotaCredito,
   renderPrecuenta,
+  renderReciboAbono,
   renderReporteVentas,
   renderReservasDia,
   renderTomaInventario,

@@ -120,7 +120,51 @@ export interface FacturaCerradaPayload {
    * interno" en la representación gráfica fiscal (número DIAN, CUFE/CUDE, QR).
    */
   fe?: FacturaElectronicaTicket;
+  /**
+   * Cartera: la parte del pedido que quedó a crédito. Solo viene cuando el
+   * restaurante tiene la cartera encendida y el pedido abrió una cuenta.
+   */
+  credito?: CreditoTicket;
   [key: string]: unknown;
+}
+
+/** La parte del pedido que el cliente quedó debiendo (cuenta por cobrar). */
+export interface CreditoTicket {
+  monto: number;
+  /** YYYY-MM-DD, en la zona del restaurante */
+  vencimiento?: string;
+  /** Lo que el cliente debe en total después de esta venta */
+  saldo_cliente?: number;
+  /** Quién debe, cuando no es el cliente que ya sale en la tirilla */
+  cliente?: string;
+}
+
+/** Recibo de un abono a la cartera (plata que entró a la caja para pagar deudas). */
+export interface ThermalReciboAbonoPayload extends Record<string, unknown> {
+  tenant_nombre?: string;
+  nit?: string;
+  telefono?: string;
+  direccion?: string;
+  /** Número del recibo, ej. "RC-000123" */
+  numero?: string;
+  /** Fecha y hora del abono (ISO); sin ella, la hora de impresión */
+  fecha?: string;
+  cliente?: string;
+  cliente_documento?: string;
+  cliente_telefono?: string;
+  monto?: number;
+  /** Clave del método de pago ('efectivo', 'nequi', …) */
+  metodo?: string;
+  referencia?: string;
+  /** A qué pedidos se aplicó el abono */
+  aplicaciones?: { pedido?: string; monto?: number }[];
+  /** Lo que el cliente sigue debiendo después del abono */
+  saldo_pendiente?: number;
+  /** Lo que sobró del abono y queda para compras futuras */
+  saldo_a_favor?: number;
+  recibido_por?: string;
+  /** Copia impresa después: lo dice el encabezado */
+  reimpresion?: boolean;
 }
 
 export interface FacturaElectronicaTicket {

@@ -1,6 +1,7 @@
 import { escBold } from '../escpos';
 import type {
   ThermalDocumentPayload,
+  ThermalReciboAbonoPayload,
   ThermalRenderOptions,
   ThermalReservasDiaPayload,
   ThermalTomaInventarioPayload,
@@ -433,6 +434,65 @@ export function renderNotaCredito(data: ThermalDocumentPayload, options: Thermal
   lines.push(ctx.sep2);
   lines.push(center('** SOLO PARA CONTROL INTERNO **', ctx.width));
   lines.push(center('Nota de Ajuste - Conservar', ctx.width));
+  lines.push(footer(ctx.width, options.footer));
+  return lines.join('\n');
+}
+
+/**
+ * Recibo de un abono a la cartera: cuánto entró, con qué método, a qué pedidos
+ * se aplicó y cómo queda el cliente. Compacto: una raya entre secciones y
+ * negrilla para lo que se busca primero (el valor y el saldo).
+ */
+export function renderReciboAbono(data: ThermalReciboAbonoPayload, options: ThermalRenderOptions = {}): string {
+  const ctx = context(options);
+  const fecha = data.fecha ? new Date(String(data.fecha)) : null;
+  if (fecha && !Number.isNaN(fecha.getTime())) ctx.now = fecha;
+  const bloques: string[][] = [];
+
+  const encabezado: string[] = [];
+  if (data.tenant_nombre) encabezado.push(center(text(data.tenant_nombre).toUpperCase(), ctx.width));
+  if (data.nit) encabezado.push(center(`NIT: ${text(data.nit)}`, ctx.width));
+  bloques.push(encabezado);
+
+  const datos: string[] = [];
+  datos.push(escBold(true) + center('RECIBO DE ABONO', ctx.width) + escBold(false));
+  if (data.numero) datos.push(center(text(data.numero), ctx.width));
+  if (data.reimpresion) datos.push(center('(REIMPRESION)', ctx.width));
+  pushDateTime(datos, ctx);
+  if (data.cliente) datos.push(`Cliente: ${text(data.cliente)}`);
+  if (data.cliente_documento) datos.push(`Doc: ${text(data.cliente_documento)}`);
+  if (data.cliente_telefono) datos.push(`Tel: ${text(data.cliente_telefono)}`);
+  bloques.push(datos);
+
+  const valor: string[] = [];
+  valor.push(escBold(true) + leftRight('VALOR RECIBIDO:', money(data.monto), ctx.width) + escBold(false));
+  if (data.metodo) valor.push(leftRight('Metodo:', labelMetodo(String(data.metodo)), ctx.width));
+  if (data.referencia) valor.push(`Ref: ${text(data.referencia)}`);
+  bloques.push(valor);
+
+  const aplicaciones = arr(data.aplicaciones);
+  if (aplicaciones.length) {
+    const aplicado: string[] = ['APLICADO A:'];
+    for (const a of aplicaciones) {
+      aplicado.push(leftRight(`  ${text(a.pedido || 'Saldo anterior')}`, money(a.monto), ctx.width));
+    }
+    bloques.push(aplicado);
+  }
+
+  const saldos: string[] = [];
+  saldos.push(escBold(true) + leftRight('SALDO PENDIENTE:', money(data.saldo_pendiente), ctx.width) + escBold(false));
+  if (num(data.saldo_a_favor) > 0) saldos.push(leftRight('Saldo a favor:', money(data.saldo_a_favor), ctx.width));
+  if (data.recibido_por) saldos.push(`Recibio: ${text(data.recibido_por)}`);
+  saldos.push('');
+  saldos.push(`Firma: ${'_'.repeat(Math.max(10, ctx.width - 8))}`);
+  bloques.push(saldos);
+
+  const lines: string[] = [];
+  for (const bloque of bloques) {
+    if (!bloque.length) continue;
+    if (lines.length) lines.push(ctx.sep);
+    lines.push(...bloque);
+  }
   lines.push(footer(ctx.width, options.footer));
   return lines.join('\n');
 }
