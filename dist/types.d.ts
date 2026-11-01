@@ -3,6 +3,11 @@ export interface ThermalRenderOptions {
     timezone?: string;
     now?: Date;
     footer?: string;
+    /**
+     * La precuenta de domicilio o para llevar no pega al final los datos de entrega
+     * porque salen aparte, en sticker (`renderStickerEntrega`).
+     */
+    datosEntregaAparte?: boolean;
 }
 export interface ThermalComandaItem {
     nombre?: string;

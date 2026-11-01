@@ -9,8 +9,12 @@ import {
   renderPrecuenta,
   renderReciboAbono,
   renderReservasDia,
+  renderStickerEntrega,
+  renderStickerPrueba,
   renderTomaInventario,
   renderVentasPLU,
+  stickerBitmapDesdeRgba,
+  tsplBeep,
   escBeep,
   escBold,
   escCashDrawerPulse,
@@ -200,6 +204,18 @@ const precuentaDomicilio = renderPrecuenta({
 
 assert.match(precuentaDomicilio, /\x1D\x56\x00/);
 assert.match(precuentaDomicilio, /DATOS PARA ENTREGA/);
+
+// Con los datos en sticker aparte, la verificación del domicilio no los pega al final.
+const precuentaSinDatos = renderPrecuenta({
+  mesa_nombre: 'Domicilio 1',
+  subtotal: 25000,
+  total: 25000,
+  recaudo_domicilio_monto: 4000,
+  cliente: { nombre: 'Alfredo', direccion: 'Calle 1' },
+}, { now, columns: 48, datosEntregaAparte: true });
+assert.doesNotMatch(precuentaSinDatos, /DATOS PARA ENTREGA/);
+assert.doesNotMatch(precuentaSinDatos, /\x1D\x56\x00/);
+assert.match(precuentaSinDatos, /TOTAL A PAGAR/);
 
 const cierre = renderCierreCaja({
   cajero: 'Niria',
@@ -1020,3 +1036,118 @@ for (const columns of [32, 48]) {
 assert.doesNotMatch(sinMarcas(renderCierreCaja({ ...cierreConCartera, cartera: undefined }, { now, columns: 48 })), /CARTERA|Abonos/);
 
 console.log('OK — rayas justas, total en negrilla, metodo legible y avance al corte (32 y 48 col)');
+
+// ── Sticker de entrega en TSPL (4.15.0) ──────────────────────────────────────
+const latin1 = (bytes) => Array.from(bytes, (b) => String.fromCharCode(b)).join('');
+const comandosTspl = (bytes) => latin1(bytes).split('\r\n');
+const FUENTE_TSPL = { 1: [8, 12], 2: [12, 20], 3: [16, 24], 4: [24, 32] };
+const textosTspl = (bytes) => comandosTspl(bytes)
+  .map((l) => l.match(/^TEXT (\d+),(\d+),"(\d)",0,1,1,"(.*)"$/))
+  .filter(Boolean)
+  .map(([, x, y, f, valor]) => ({ x: Number(x), y: Number(y), f, valor }));
+const bitmapDe = (bytes) => {
+  const s = latin1(bytes);
+  const m = s.match(/BITMAP (\d+),(\d+),(\d+),(\d+),0,/);
+  return m ? s.substr(m.index + m[0].length, Number(m[3]) * Number(m[4])) : null;
+};
+
+const domicilioSticker = {
+  mesa_nombre: 'Domicilio 3',
+  tenant_nombre: 'Restaurante Foodly',
+  cliente: {
+    nombre: 'Andrea Gómez',
+    telefono: '310 456 7890',
+    direccion: 'Cra 45 # 12-30 apto 402',
+    barrio: 'Cedritos',
+    notas: 'Timbre dañado, llamar al llegar',
+  },
+};
+const llevarSticker = {
+  mesa_nombre: 'Para llevar 2',
+  tenant_nombre: 'Restaurante Foodly',
+  cliente: { nombre: 'Julián Patiño', telefono: '315 220 1188', notas: 'Recoge a la 1:10 pm' },
+};
+
+// Los cuatro tamaños de Empresa: un solo PRINT, franja invertida con icono y ningún texto
+// fuera del sticker (el cabezal imprime 384 puntos; un rollo angosto va centrado).
+for (const [anchoMm, altoMm] of [[40, 30], [50, 30], [50, 40], [57, 40]]) {
+  const derecha = Math.max(0, (384 - anchoMm * 8) / 2) + Math.min(anchoMm * 8, 384) - 8;
+  for (const payload of [domicilioSticker, llevarSticker]) {
+    const bytes = renderStickerEntrega(payload, { anchoMm, altoMm, now });
+    const cmds = comandosTspl(bytes);
+    assert.equal(cmds[0], `SIZE ${anchoMm} mm,${altoMm} mm`);
+    assert.ok(cmds.includes('CLS'));
+    assert.equal(cmds.filter((c) => c.startsWith('PRINT')).length, 1);
+    assert.ok(cmds.some((c) => c.startsWith('REVERSE ')));
+    assert.ok(bitmapDe(bytes), 'sin logo sale la moto o la bolsa');
+    for (const t of textosTspl(bytes)) {
+      const [w, h] = FUENTE_TSPL[t.f];
+      assert.ok(t.x + t.valor.length * w <= derecha, `${anchoMm}x${altoMm}: TEXT se sale por la derecha ${JSON.stringify(t)}`);
+      assert.ok(t.y + h <= altoMm * 8 - 8, `${anchoMm}x${altoMm}: TEXT se sale por abajo ${JSON.stringify(t)}`);
+      assert.match(t.valor, /^[\x20-\x7E]*$/);
+    }
+  }
+}
+
+const d5030 = latin1(renderStickerEntrega(domicilioSticker, { now }));
+assert.match(d5030, /^SIZE 50 mm,30 mm\r\n/);
+assert.match(d5030, /"3",0,1,1,"DOMICILIO 3"/);
+assert.match(d5030, /"2",0,1,1,"10:30 am"/);
+assert.match(d5030, /"4",0,1,1,"ANDREA GOMEZ"/);
+assert.match(d5030, /"3",0,1,1,"Tel 310 456 7890"/);
+assert.match(d5030, /QRCODE \d+,\d+,L,3,A,0,"https:\/\/maps\.google\.com\/\?q=Cra\+45\+%23\+12-30\+apto\+402%2C\+Cedritos"/);
+// Una dirección larga se recorta para que el QR no pase de la versión 4 (78 bytes).
+const qrLargo = latin1(renderStickerEntrega({
+  ...domicilioSticker,
+  cliente: { ...domicilioSticker.cliente, direccion: 'Avenida Carrera 68 # 100-25 Torre 4 Apartamento 1203 Conjunto Los Pinos' },
+}, { now })).match(/QRCODE [^\r]*"(.*)"/)[1];
+assert.ok(qrLargo.length <= 78, `QR de ${qrLargo.length} bytes`);
+assert.match(qrLargo, /^https:\/\/maps\.google\.com\/\?q=Avenida\+Carrera\+68/);
+assert.match(d5030, /Nota: Timbre danado/);
+assert.doesNotMatch(d5030, /BOX |BAR |Restaurante Foodly/, 'el pie y el recuadro son solo de los stickers altos');
+
+const d5740 = latin1(renderStickerEntrega(domicilioSticker, { anchoMm: 57, altoMm: 40, now }));
+assert.match(d5740, /BOX \d+,\d+,\d+,\d+,2/);
+assert.match(d5740, /BAR \d+,\d+,\d+,2/);
+assert.match(d5740, /"Restaurante Foodly"/);
+
+const l5030 = latin1(renderStickerEntrega(llevarSticker, { now }));
+assert.match(l5030, /"PARA LLEVAR 2"/);
+assert.match(l5030, /"4",0,1,1,"JULIAN PATINO"/);
+assert.doesNotMatch(l5030, /QRCODE/, 'para llevar no lleva QR');
+assert.match(l5030, /Nota: Recoge a la 1:10 pm/);
+
+assert.doesNotMatch(latin1(renderStickerEntrega(domicilioSticker, { anchoMm: 40, altoMm: 30, now })), /QRCODE/, 'el QR no cabe en 40 mm');
+assert.doesNotMatch(latin1(renderStickerEntrega(domicilioSticker, { now, qr: false })), /QRCODE/);
+
+// Icono: logo del restaurante, moto/bolsa o nada; sin logo cae a moto/bolsa.
+const logoRgba = [];
+for (let i = 0; i < 26 * 26; i++) logoRgba.push(0, 0, 0, i % 3 === 0 ? 255 : 0);
+const logoSticker = stickerBitmapDesdeRgba(logoRgba, 26, 26);
+const bitmapMoto = bitmapDe(renderStickerEntrega(domicilioSticker, { now, icono: 'tipo' }));
+assert.notEqual(bitmapDe(renderStickerEntrega(domicilioSticker, { now, logo: logoSticker })), bitmapMoto);
+assert.equal(bitmapDe(renderStickerEntrega(domicilioSticker, { now })), bitmapMoto);
+assert.notEqual(bitmapDe(renderStickerEntrega(llevarSticker, { now, icono: 'tipo' })), bitmapMoto, 'para llevar va la bolsa');
+assert.equal(bitmapDe(renderStickerEntrega(domicilioSticker, { now, icono: 'ninguno' })), null);
+
+assert.deepEqual(
+  Array.from(stickerBitmapDesdeRgba([0, 0, 0, 255, 255, 255, 255, 255, 0, 0, 0, 0, 6, 249, 249, 255], 4, 1).puntos),
+  [true, false, false, true],
+  'tinta = opaco y no casi blanco (el cian de Foodly sí marca)',
+);
+
+// Un dato del cliente nunca cierra el TEXT ni mete comandos: ni comillas, ni saltos, ni barra.
+const malicioso = renderStickerEntrega({
+  mesa_nombre: 'Domicilio "9"',
+  cliente: { nombre: 'X"\r\nPRINT 50', direccion: 'Calle "1"\nCLS', notas: 'a\\["]b\nSOUND 9,9' },
+}, { now });
+const cmdsMaliciosos = comandosTspl(malicioso);
+assert.equal(cmdsMaliciosos.filter((c) => c.startsWith('PRINT')).length, 1);
+assert.equal(cmdsMaliciosos.filter((c) => c === 'CLS').length, 1);
+assert.ok(!cmdsMaliciosos.some((c) => c.startsWith('SOUND')));
+for (const t of textosTspl(malicioso)) assert.doesNotMatch(t.valor, /["\\]/);
+
+assert.match(latin1(renderStickerPrueba({ empresa: 'Crokanza' })), /"PRUEBA DE STICKER"/);
+assert.equal(latin1(tsplBeep()), 'SOUND 5,200\r\n');
+
+console.log('OK — sticker de entrega TSPL (4 tamaños, QR, icono, nota, datos sin inyección)');

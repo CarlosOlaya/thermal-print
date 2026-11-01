@@ -69,7 +69,7 @@ export function renderPrecuenta(data: ThermalDocumentPayload, options: ThermalRe
   lines.push(center('Gracias por su visita!', ctx.width));
   lines.push(footer(ctx.width, options.footer));
 
-  if (esDelivery && isRecord(data.cliente)) {
+  if (esDelivery && isRecord(data.cliente) && !options.datosEntregaAparte) {
     lines.push('');
     lines.push('');
     lines.push('\x1D\x56\x00');

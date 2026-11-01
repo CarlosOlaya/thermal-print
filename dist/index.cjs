@@ -2,6 +2,7 @@ var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
 var __export = (target, all) => {
   for (var name in all)
     __defProp(target, name, { get: all[name], enumerable: true });
@@ -15,6 +16,7 @@ var __copyProps = (to, from, except, desc) => {
   return to;
 };
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
+var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
 
 // src/index.ts
 var index_exports = {};
@@ -46,10 +48,14 @@ __export(index_exports, {
   renderReciboAbono: () => renderReciboAbono,
   renderReporteVentas: () => renderReporteVentas,
   renderReservasDia: () => renderReservasDia,
+  renderStickerEntrega: () => renderStickerEntrega,
+  renderStickerPrueba: () => renderStickerPrueba,
   renderTomaInventario: () => renderTomaInventario,
   renderVentasPLU: () => renderVentasPLU,
   sanitizeText: () => sanitizeText,
-  textToEscPosBytes: () => textToEscPosBytes
+  stickerBitmapDesdeRgba: () => stickerBitmapDesdeRgba,
+  textToEscPosBytes: () => textToEscPosBytes,
+  tsplBeep: () => tsplBeep
 });
 module.exports = __toCommonJS(index_exports);
 
@@ -391,6 +397,334 @@ function renderComandaAnulacion(payload, options = {}) {
   return lines.join("\n");
 }
 
+// src/renderers/sticker-iconos.ts
+var MOTO = [
+  "..........................",
+  "..........................",
+  "..........................",
+  "..........................",
+  "..........................",
+  "..........................",
+  "..########................",
+  "..########......#####.....",
+  "..########......#####.....",
+  "..########.....#####......",
+  "..########.....#####......",
+  "..########.....##.###.....",
+  "..########....###.###.....",
+  "..##############...##.....",
+  ".###############...##.....",
+  ".##############....###....",
+  "....####...........####...",
+  "...######.........######..",
+  "...######.........######..",
+  "...######.........######..",
+  "...######.........######..",
+  "....####...........####...",
+  "......#..............#....",
+  "..........................",
+  "..........................",
+  ".........................."
+];
+var BOLSA = [
+  "..........................",
+  "..........................",
+  "...........####...........",
+  "..........######..........",
+  ".........########.........",
+  "........###....###........",
+  "........###....###........",
+  "........##......##........",
+  "........###....###........",
+  "....##################....",
+  "....##################....",
+  "....##################....",
+  "....##################....",
+  "....##################....",
+  "....##################....",
+  "....##################....",
+  "....##################....",
+  "....##################....",
+  "....##################....",
+  "....##################....",
+  "....##################....",
+  "...####################...",
+  "....##################....",
+  "....##################....",
+  "..........................",
+  ".........................."
+];
+function desdeArte(filas) {
+  return {
+    ancho: filas[0].length,
+    alto: filas.length,
+    puntos: filas.join("").split("").map((c) => c === "#")
+  };
+}
+var ICONO_MOTO = desdeArte(MOTO);
+var ICONO_BOLSA = desdeArte(BOLSA);
+
+// src/renderers/sticker.ts
+var PUNTOS_MM = 8;
+var CABEZAL = 384;
+var MARGEN = 8;
+var FUENTES = { "1": [8, 12], "2": [12, 20], "3": [16, 24], "4": [24, 32] };
+var QR_CAJA = 100;
+var QR_MAX = 78;
+var ICONO = 36;
+function renderStickerEntrega(data, options = {}) {
+  const anchoMm = acotar(options.anchoMm, 30, 80, 50);
+  const altoMm = acotar(options.altoMm, 20, 80, 30);
+  const etiquetaAncho = anchoMm * PUNTOS_MM;
+  const etiquetaAlto = altoMm * PUNTOS_MM;
+  const x0 = MARGEN + Math.max(0, Math.floor((CABEZAL - etiquetaAncho) / 2));
+  const ancho = Math.min(etiquetaAncho, CABEZAL) - 2 * MARGEN;
+  const grande = altoMm >= 40;
+  const mesa = texto(data.mesa_nombre);
+  const llevar = /llevar/i.test(mesa);
+  const cliente = isRecord(data.cliente) ? data.cliente : {};
+  const p = new Programa();
+  p.cmd(`SIZE ${anchoMm} mm,${altoMm} mm`);
+  p.cmd("GAP 2 mm,0 mm");
+  p.cmd("DIRECTION 1,0");
+  p.cmd("REFERENCE 0,0");
+  p.cmd("DENSITY 8");
+  p.cmd("SET TEAR ON");
+  p.cmd("CLS");
+  const franjaAlto = grande ? 48 : 40;
+  const yFranja = MARGEN;
+  const icono = iconoDeFranja(options, llevar);
+  const xTitulo = x0 + (icono ? 4 + 40 + 6 : 8);
+  const hora = horaCorta(options.now || /* @__PURE__ */ new Date(), options.timezone || "America/Bogota");
+  const xHora = x0 + ancho - 6 - hora.length * FUENTES["2"][0];
+  const titulo = recortar((mesa || (llevar ? "Para llevar" : "Domicilio")).toUpperCase(), Math.floor((xHora - 8 - xTitulo) / FUENTES["3"][0]));
+  p.texto(xTitulo, yFranja + (franjaAlto - 24) / 2, "3", titulo);
+  p.texto(xHora, yFranja + (franjaAlto - 20) / 2, "2", hora);
+  p.cmd(`REVERSE ${x0},${yFranja},${ancho},${franjaAlto}`);
+  if (icono) p.bitmap(x0 + 4, yFranja + (franjaAlto - ICONO) / 2, iconoCircular(icono));
+  let fondo = etiquetaAlto - MARGEN;
+  const restaurante = texto(data.tenant_nombre);
+  if (grande && restaurante) {
+    const yPie = etiquetaAlto - MARGEN - FUENTES["2"][1];
+    const nombre2 = recortar(restaurante, Math.floor(ancho / FUENTES["2"][0]));
+    p.cmd(`BAR ${x0},${yPie - 6},${ancho},2`);
+    p.texto(x0 + Math.floor((ancho - nombre2.length * FUENTES["2"][0]) / 2), yPie, "2", nombre2);
+    fondo = yPie - 10;
+  }
+  let y = yFranja + franjaAlto + 8;
+  const nombre = texto(cliente.nombre).toUpperCase();
+  if (nombre) {
+    const cabenGrande = Math.floor(ancho / FUENTES["4"][0]);
+    let fuente = "4";
+    let lineas = [nombre];
+    if (nombre.length > cabenGrande) {
+      if (llevar) lineas = envolver(nombre, cabenGrande, 2);
+      else {
+        fuente = "3";
+        lineas = [recortar(nombre, Math.floor(ancho / FUENTES["3"][0]))];
+      }
+    }
+    for (const l of lineas) {
+      p.texto(x0, y, fuente, l);
+      y += FUENTES[fuente][1] + 4;
+    }
+    y += 2;
+  }
+  const direccion = texto(cliente.direccion);
+  const barrio = texto(cliente.barrio);
+  const conQr = !llevar && options.qr !== false && anchoMm >= 50 && !!direccion && y + QR_CAJA - 1 <= fondo;
+  const finQr = conQr ? y + QR_CAJA : 0;
+  if (conQr) {
+    p.cmd(`QRCODE ${x0 + ancho - QR_CAJA},${y},L,3,A,0,"${urlMaps([direccion, barrio, texto(data.ciudad)])}"`);
+  }
+  const anchoEn = (yLinea) => conQr && yLinea < finQr + 4 ? ancho - QR_CAJA - 8 : ancho;
+  const linea = (fuente, valor, maxLineas = 1) => {
+    const [w, h] = FUENTES[fuente];
+    for (const l of envolver(valor, Math.floor(anchoEn(y) / w), maxLineas)) {
+      if (y + h > fondo) return;
+      p.texto(x0, y, fuente, l);
+      y += h + 3;
+    }
+  };
+  if (cliente.telefono) linea("3", `Tel ${texto(cliente.telefono)}`);
+  if (!llevar && direccion) linea("2", direccion, 2);
+  if (!llevar && barrio) linea("2", barrio);
+  const nota = texto(cliente.notas);
+  if (nota) {
+    const fuente = grande || llevar ? "2" : "1";
+    const [w, h] = FUENTES[fuente];
+    if (grande) {
+      const top = y + 2;
+      const caja = anchoEn(top);
+      const caben = Math.floor((fondo - top - 8) / (h + 3));
+      const lineas = caben > 0 ? envolver(`Nota: ${nota}`, Math.floor((caja - 12) / w), caben) : [];
+      if (lineas.length) {
+        p.cmd(`BOX ${x0},${top},${x0 + caja},${top + 8 + lineas.length * (h + 3)},2`);
+        lineas.forEach((l, i) => p.texto(x0 + 6, top + 5 + i * (h + 3), fuente, l));
+      }
+    } else {
+      const caben = Math.floor((fondo - y) / (h + 3));
+      if (caben > 0) linea(fuente, `Nota: ${nota}`, caben);
+    }
+  }
+  p.cmd("PRINT 1,1");
+  return p.bytes();
+}
+function renderStickerPrueba(options = {}) {
+  return renderStickerEntrega({
+    mesa_nombre: "Domicilio 1",
+    tenant_nombre: options.empresa || "Foodly",
+    cliente: {
+      nombre: "Prueba de sticker",
+      telefono: "300 000 0000",
+      direccion: "Calle 1 # 2-3",
+      barrio: "Centro",
+      notas: "Si lees esto, la impresora de stickers funciona."
+    }
+  }, options);
+}
+function tsplBeep() {
+  return ascii("SOUND 5,200\r\n");
+}
+function stickerBitmapDesdeRgba(rgba, ancho, alto) {
+  const puntos = [];
+  for (let i = 0; i < ancho * alto; i++) {
+    const r = rgba[i * 4], g = rgba[i * 4 + 1], b = rgba[i * 4 + 2], a = rgba[i * 4 + 3];
+    const luz = 0.299 * r + 0.587 * g + 0.114 * b;
+    puntos.push(a > 110 && luz < 200);
+  }
+  return { ancho, alto, puntos };
+}
+function iconoDeFranja(options, llevar) {
+  const tipo = options.icono || "logo";
+  if (tipo === "ninguno") return null;
+  if (tipo === "logo" && options.logo && options.logo.ancho > 0 && options.logo.alto > 0) return options.logo;
+  return llevar ? ICONO_BOLSA : ICONO_MOTO;
+}
+function iconoCircular(dibujo) {
+  const r = ICONO / 2;
+  const ox = Math.floor((ICONO - Math.min(dibujo.ancho, 28)) / 2) - Math.max(0, Math.floor((dibujo.ancho - 28) / 2));
+  const oy = Math.floor((ICONO - Math.min(dibujo.alto, 28)) / 2) - Math.max(0, Math.floor((dibujo.alto - 28) / 2));
+  const filas = [];
+  for (let y = 0; y < ICONO; y++) {
+    const fila = [];
+    for (let x = 0; x < ICONO; x++) {
+      const dentro = (x - r + 0.5) ** 2 + (y - r + 0.5) ** 2 <= r * r;
+      let tinta = !dentro;
+      const dx = x - ox, dy = y - oy;
+      if (dentro && dx >= 0 && dy >= 0 && dx < dibujo.ancho && dy < dibujo.alto) {
+        tinta = Boolean(dibujo.puntos[dy * dibujo.ancho + dx]);
+      }
+      fila.push(tinta);
+    }
+    filas.push(fila);
+  }
+  return filas;
+}
+var Programa = class {
+  constructor() {
+    __publicField(this, "partes", []);
+  }
+  cmd(linea) {
+    this.partes.push(ascii(`${linea}\r
+`));
+  }
+  texto(x, y, fuente, valor) {
+    if (valor) this.cmd(`TEXT ${Math.round(x)},${Math.round(y)},"${fuente}",0,1,1,"${valor}"`);
+  }
+  /** TSPL BITMAP: bit 1 = blanco, 0 = negro, el más alto a la izquierda; el relleno va negro. */
+  bitmap(x, y, filas) {
+    const alto = filas.length;
+    const bytesFila = Math.ceil(filas[0].length / 8);
+    const datos = new Uint8Array(bytesFila * alto);
+    for (let fy = 0; fy < alto; fy++) {
+      for (let b = 0; b < bytesFila; b++) {
+        let v = 0;
+        for (let bit = 0; bit < 8; bit++) {
+          const fx = b * 8 + bit;
+          if (fx < filas[fy].length && !filas[fy][fx]) v |= 128 >> bit;
+        }
+        datos[fy * bytesFila + b] = v;
+      }
+    }
+    this.partes.push(ascii(`BITMAP ${Math.round(x)},${Math.round(y)},${bytesFila},${alto},0,`), datos, ascii("\r\n"));
+  }
+  bytes() {
+    const total = this.partes.reduce((n, parte) => n + parte.length, 0);
+    const salida = new Uint8Array(total);
+    let i = 0;
+    for (const parte of this.partes) {
+      salida.set(parte, i);
+      i += parte.length;
+    }
+    return salida;
+  }
+};
+function texto(value) {
+  return sanitizeText(value).replace(/\s+/g, " ").replace(/"/g, "'").replace(/\\/g, "/").trim();
+}
+function urlMaps(partes) {
+  const base = "https://maps.google.com/?q=";
+  const codificar = (valor) => encodeURIComponent(valor.trim()).replace(/%20/g, "+");
+  let consulta = partes.filter(Boolean).join(", ");
+  while (consulta && (base + codificar(consulta)).length > QR_MAX) consulta = consulta.slice(0, -1);
+  return base + codificar(consulta);
+}
+function envolver(valor, maxChars, maxLineas) {
+  if (maxChars < 1 || maxLineas < 1 || !valor) return [];
+  const lineas = [];
+  let actual = "";
+  for (const palabra of valor.split(" ")) {
+    let resto = palabra;
+    while (resto.length > maxChars) {
+      if (actual) {
+        lineas.push(actual);
+        actual = "";
+      }
+      lineas.push(resto.slice(0, maxChars));
+      resto = resto.slice(maxChars);
+    }
+    if (!resto) continue;
+    if (!actual) actual = resto;
+    else if (actual.length + 1 + resto.length <= maxChars) actual += ` ${resto}`;
+    else {
+      lineas.push(actual);
+      actual = resto;
+    }
+  }
+  if (actual) lineas.push(actual);
+  if (lineas.length <= maxLineas) return lineas;
+  const visibles = lineas.slice(0, maxLineas);
+  visibles[maxLineas - 1] = recortar(`${visibles[maxLineas - 1]} ${lineas[maxLineas]}`, maxChars, true);
+  return visibles;
+}
+function recortar(valor, maxChars, siempreMarcar = false) {
+  if (maxChars < 1) return "";
+  if (valor.length <= maxChars && !siempreMarcar) return valor;
+  if (maxChars <= 3) return valor.slice(0, maxChars);
+  return `${valor.slice(0, maxChars - 3).trimEnd()}...`;
+}
+function horaCorta(fecha, timezone) {
+  try {
+    return fecha.toLocaleTimeString("en-US", { timeZone: timezone, hour: "numeric", minute: "2-digit", hour12: true }).toLowerCase().replace(/\s+/g, " ");
+  } catch {
+    const h = fecha.getHours();
+    return `${h % 12 || 12}:${String(fecha.getMinutes()).padStart(2, "0")} ${h >= 12 ? "pm" : "am"}`;
+  }
+}
+function acotar(valor, min, max, defecto) {
+  const n = Math.round(Number(valor));
+  return Number.isFinite(n) && n > 0 ? Math.min(max, Math.max(min, n)) : defecto;
+}
+function ascii(valor) {
+  const salida = new Uint8Array(valor.length);
+  for (let i = 0; i < valor.length; i++) salida[i] = valor.charCodeAt(i) & 127;
+  return salida;
+}
+function isRecord(value) {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
 // src/renderers/factura.ts
 function renderFactura(factura, options = {}) {
   const width = clampColumns(options.columns);
@@ -454,8 +788,8 @@ function unirSecciones(secciones, sep) {
 function negrilla(linea) {
   return escBold(true) + linea + escBold(false);
 }
-function centrado(lines, texto, width) {
-  for (const l of wrapWords(texto, width)) lines.push(center(l, width));
+function centrado(lines, texto2, width) {
+  for (const l of wrapWords(texto2, width)) lines.push(center(l, width));
 }
 function renderEncabezado(lines, factura, width) {
   const emisor = factura.fe?.emisor;
@@ -799,7 +1133,7 @@ function renderPrecuenta(data, options = {}) {
   lines.push(center("Documento no fiscal - verificacion", ctx.width));
   lines.push(center("Gracias por su visita!", ctx.width));
   lines.push(footer(ctx.width, options.footer));
-  if (esDelivery && isRecord(data.cliente)) {
+  if (esDelivery && isRecord2(data.cliente) && !options.datosEntregaAparte) {
     lines.push("");
     lines.push("");
     lines.push("V\0");
@@ -811,7 +1145,7 @@ function renderPrecuenta(data, options = {}) {
 }
 function renderDatosCliente(data, options = {}) {
   const ctx = context(options);
-  const cliente = isRecord(data.cliente) ? data.cliente : void 0;
+  const cliente = isRecord2(data.cliente) ? data.cliente : void 0;
   const lines = [];
   if (!cliente) {
     lines.push(center("No hay datos de cliente.", ctx.width));
@@ -841,13 +1175,13 @@ function renderDatosCliente(data, options = {}) {
 function renderCierreCaja(data, options = {}) {
   const ctx = context(options);
   const esRelevo = text(data.tipo_cierre) === "relevo";
-  const relevo = isRecord(data.relevo) ? data.relevo : void 0;
+  const relevo = isRecord2(data.relevo) ? data.relevo : void 0;
   const lines = header(data, esRelevo ? "RELEVO DE TURNO" : "CIERRE DE CAJA", ctx);
   const metodos = arr(data.metodos_desglose);
   const tieneDesglose = metodos.length > 0;
-  const gastos = isRecord(data.gastos) ? data.gastos : void 0;
-  const ingresosCaja = isRecord(data.ingresos_caja) ? data.ingresos_caja : void 0;
-  const domicilios = isRecord(data.domicilios) ? data.domicilios : void 0;
+  const gastos = isRecord2(data.gastos) ? data.gastos : void 0;
+  const ingresosCaja = isRecord2(data.ingresos_caja) ? data.ingresos_caja : void 0;
+  const domicilios = isRecord2(data.domicilios) ? data.domicilios : void 0;
   lines.push(leftRight("Cajero:", text(data.cajero), ctx.width));
   if (data.fecha_apertura) lines.push(leftRight("Apertura:", dateTime(data.fecha_apertura, ctx), ctx.width));
   lines.push(leftRight(esRelevo ? "Relevo:" : "Cierre:", dateTime(data.fecha_cierre || ctx.now, ctx), ctx.width));
@@ -897,7 +1231,7 @@ function renderCierreCaja(data, options = {}) {
   renderDiscountSummary(lines, data, ctx);
   renderExpenseSummary(lines, gastos, ctx);
   renderCashIncomeSummary(lines, ingresosCaja, ctx);
-  renderCarteraSummary(lines, isRecord(data.cartera) ? data.cartera : void 0, ctx);
+  renderCarteraSummary(lines, isRecord2(data.cartera) ? data.cartera : void 0, ctx);
   renderCashSummary(lines, data, metodos, gastos, ingresosCaja, domicilios, ctx);
   renderOrderSummary(lines, data, ctx);
   renderDeliverySummary(lines, domicilios, ctx);
@@ -914,7 +1248,7 @@ function renderCierreCaja(data, options = {}) {
 }
 function renderGastosTurno(data, options = {}) {
   const ctx = context(options);
-  const gastos = isRecord(data.gastos) ? data.gastos : {};
+  const gastos = isRecord2(data.gastos) ? data.gastos : {};
   const items = arr(gastos.items);
   if (!items.length) return "";
   const lines = header(data, "EGRESOS DEL TURNO", ctx);
@@ -998,7 +1332,7 @@ function renderReporteVentas(data, options = {}) {
   lines.push(leftRight("Periodo:", `${text(data.desde)} a ${text(data.hasta)}`, ctx.width));
   lines.push(leftRight("Generado:", dateTime(ctx.now, ctx), ctx.width));
   lines.push(ctx.sep);
-  if (isRecord(data.resumen)) {
+  if (isRecord2(data.resumen)) {
     const r = data.resumen;
     lines.push(escBold(true) + "RESUMEN" + escBold(false));
     lines.push(ctx.sep);
@@ -1092,7 +1426,7 @@ function renderCorreccion(data, options = {}) {
 }
 function renderNotaCredito(data, options = {}) {
   const ctx = context(options);
-  const detalle = isRecord(data.detalle) ? data.detalle : {};
+  const detalle = isRecord2(data.detalle) ? data.detalle : {};
   const lines = header(data, "*** NOTA DE AJUSTE ***", ctx);
   if (data.numero_nota) lines.push(center(text(data.numero_nota), ctx.width));
   lines.push(ctx.sep2);
@@ -1372,7 +1706,7 @@ function renderFacturaTurno(lines, factura, ctx) {
   const numero = text(factura.numero_factura).padEnd(8, " ");
   if (tipo === "anulada") {
     lines.push(`${numero}  ANULADA ${money(factura.total).padStart(Math.max(10, ctx.width - 18), " ")}`);
-    const nota = isRecord(factura.nota_credito) ? factura.nota_credito : void 0;
+    const nota = isRecord2(factura.nota_credito) ? factura.nota_credito : void 0;
     if (nota?.numero) lines.push(`  >> Anulada por ${text(nota.numero)}`);
     if (nota?.motivo) lines.push(`     Motivo: ${text(nota.motivo)}`);
     if (!nota && factura.motivo_anulacion) lines.push(`  >> ${text(factura.motivo_anulacion)}`);
@@ -1380,7 +1714,7 @@ function renderFacturaTurno(lines, factura, ctx) {
   }
   if (tipo === "nc") {
     lines.push(`[NA]      Nota de Ajuste ${money(factura.total).padStart(10, " ")}`);
-    const nota = isRecord(factura.nota_credito) ? factura.nota_credito : void 0;
+    const nota = isRecord2(factura.nota_credito) ? factura.nota_credito : void 0;
     if (nota?.numero) lines.push(`  >> ${text(nota.numero)}: ${text(nota.motivo || "ajuste")}`);
     return;
   }
@@ -1440,7 +1774,7 @@ function renderExpenseRows(lines, items, ctx) {
   });
 }
 function renderExpenseNotes(lines, item, ctx) {
-  const proveedor = isRecord(item.proveedor) ? item.proveedor : void 0;
+  const proveedor = isRecord2(item.proveedor) ? item.proveedor : void 0;
   if (proveedor?.nombre) pushWrapped(lines, "Prov", proveedor.nombre, ctx);
   if (item.observacion) pushWrapped(lines, "Obs", item.observacion, ctx);
 }
@@ -1504,7 +1838,7 @@ function renderCashSummary(lines, data, metodos, gastos, ingresosCaja, domicilio
   lines.push(leftRight("+ Ventas:", money(ventaEf), ctx.width));
   lines.push(leftRight("+ Propinas:", money(servicioEf), ctx.width));
   if (num(ingresosCaja?.total_efectivo) > 0) lines.push(leftRight("+ Ingresos caja:", money(ingresosCaja?.total_efectivo), ctx.width));
-  const cartera = isRecord(data.cartera) ? data.cartera : void 0;
+  const cartera = isRecord2(data.cartera) ? data.cartera : void 0;
   if (num(cartera?.efectivo) > 0) lines.push(leftRight("+ Abonos cartera:", money(cartera?.efectivo), ctx.width));
   if (num(gastosEf?.total) > 0) lines.push(leftRight("- Egresos:", `-${money(gastosEf?.total)}`, ctx.width));
   if (num(domicilios?.recaudado_efectivo) > 0) lines.push(leftRight("+ Domicilio:", money(domicilios?.recaudado_efectivo), ctx.width));
@@ -1652,9 +1986,9 @@ function numOrDefault(value, fallback) {
   return Number.isFinite(numeric) ? numeric : fallback;
 }
 function arr(value) {
-  return Array.isArray(value) ? value.filter(isRecord) : [];
+  return Array.isArray(value) ? value.filter(isRecord2) : [];
 }
-function isRecord(value) {
+function isRecord2(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 // Annotate the CommonJS export names for ESM import in node:
@@ -1686,9 +2020,13 @@ function isRecord(value) {
   renderReciboAbono,
   renderReporteVentas,
   renderReservasDia,
+  renderStickerEntrega,
+  renderStickerPrueba,
   renderTomaInventario,
   renderVentasPLU,
   sanitizeText,
-  textToEscPosBytes
+  stickerBitmapDesdeRgba,
+  textToEscPosBytes,
+  tsplBeep
 });
 //# sourceMappingURL=index.cjs.map

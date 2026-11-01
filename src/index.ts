@@ -29,6 +29,15 @@ export {
 } from './escpos';
 export { center, formatDate, formatMoney, formatTime, labelMetodo, leftRight, sanitizeText } from './utils';
 export { renderComanda, renderComandaAnulacion } from './renderers/comanda';
+export {
+  renderStickerEntrega,
+  renderStickerPrueba,
+  stickerBitmapDesdeRgba,
+  tsplBeep,
+  type StickerBitmap,
+  type StickerIcono,
+  type StickerOptions,
+} from './renderers/sticker';
 export { renderFactura } from './renderers/factura';
 export {
   renderCierreCaja,

@@ -2,5 +2,6 @@ export type { CreditoTicket, FacturaCerradaPayload, FacturaElectronicaTicket, It
 export { ESC, escBeep, escBold, escCashDrawerPulse, escCut, escFontSize, escLeftMargin, qrMarker, textToEscPosBytes, type EscPosByteOptions, } from './escpos';
 export { center, formatDate, formatMoney, formatTime, labelMetodo, leftRight, sanitizeText } from './utils';
 export { renderComanda, renderComandaAnulacion } from './renderers/comanda';
+export { renderStickerEntrega, renderStickerPrueba, stickerBitmapDesdeRgba, tsplBeep, type StickerBitmap, type StickerIcono, type StickerOptions, } from './renderers/sticker';
 export { renderFactura } from './renderers/factura';
 export { renderCierreCaja, renderCorreccion, renderDatosCliente, renderFacturasTurno, renderGastosTurno, renderNotaCredito, renderPrecuenta, renderReciboAbono, renderReporteVentas, renderReservasDia, renderTomaInventario, renderVentasPLU, } from './renderers/documents';
