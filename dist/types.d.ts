@@ -124,7 +124,38 @@ export interface FacturaCerradaPayload {
      * restaurante tiene la cartera encendida y el pedido abrió una cuenta.
      */
     credito?: CreditoTicket;
+    /**
+     * Bonos: el QR para reclamar los bonos que ganó el pedido. Solo viene cuando
+     * el restaurante entrega bonos y el pedido pasó la compra mínima de alguna
+     * ruta. El código del bono NO viaja: el comensal lo ve al escanear.
+     */
+    bono_qr?: BonoQrTicket;
     [key: string]: unknown;
+}
+/** Un bono que ganó el pedido, con las condiciones que se imprimen. */
+export interface BonoQrItem {
+    /** Nombre de la ruta («Ruta Sincelejo») */
+    ruta: string;
+    /** Porcentaje de descuento */
+    porcentaje: number;
+    /** Primer día en que se puede usar, YYYY-MM-DD (zona del restaurante) */
+    desde: string;
+    /** Último día en que se puede usar, YYYY-MM-DD */
+    hasta: string;
+    /** Tope de la base del descuento en pesos: lo que consumió, con el techo de la ruta */
+    tope?: number;
+    /** Restaurantes donde se usa (hasta 4 nombres) */
+    donde?: string[];
+    /** Cuántos restaurantes hay en total cuando no caben los nombres */
+    total_restaurantes?: number;
+}
+/** El QR del pedido: uno solo aunque gane en varias rutas. */
+export interface BonoQrTicket {
+    /** Lo que lleva el QR: la página pública del bono */
+    url: string;
+    /** Dirección corta de los términos que se imprime en texto */
+    terminos?: string;
+    bonos: BonoQrItem[];
 }
 /** La parte del pedido que el cliente quedó debiendo (cuenta por cobrar). */
 export interface CreditoTicket {

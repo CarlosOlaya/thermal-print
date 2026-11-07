@@ -1,4 +1,5 @@
 import type {
+  BonoQrItem,
   FacturaCerradaPayload,
   FacturaElectronicaTicket,
   ItemEvento,
@@ -78,6 +79,14 @@ export function renderFactura(factura: FacturaCerradaPayload, options: ThermalRe
   } else {
     lines.push(sep);
     lines.push(center('** SOLO PARA CONTROL INTERNO **', width));
+  }
+  // El bono va DESPUÉS de lo fiscal: es publicidad del restaurante, no parte
+  // de lo que se le declaró a la DIAN.
+  const bono: string[] = [];
+  renderBonoQr(bono, factura, width);
+  if (bono.length > 0) {
+    lines.push(sep);
+    lines.push(...bono);
   }
   lines.push(center('Gracias por su visita!', width));
   // El pie de marca ("Desarrollado por …") sobra cuando el bloque fiscal ya
@@ -545,6 +554,102 @@ function renderCredito(lines: string[], factura: FacturaCerradaPayload, width: n
   }
   lines.push('');
   lines.push(`Firma: ${'_'.repeat(Math.max(10, width - 8))}`);
+}
+
+/**
+ * Bonos: el QR para reclamar lo que ganó el pedido. El código NO se imprime
+ * (el comensal lo ve al escanear: así pasa por la página de la ruta). En papel
+ * van las condiciones clave de la promoción — porcentaje, fechas, dónde y
+ * tope — porque lo impreso obliga (Ley 1480 de 2011, art. 33); los términos
+ * completos, en la dirección que se imprime al final.
+ */
+function renderBonoQr(lines: string[], factura: FacturaCerradaPayload, width: number): void {
+  const ticket = factura.bono_qr;
+  const url = typeof ticket?.url === 'string' ? ticket.url.trim() : '';
+  const bonos = (ticket?.bonos || []).filter(
+    (b): b is BonoQrItem => Boolean(b) && Number(b.porcentaje) > 0 && Boolean(fechaCorta(b.desde)) && Boolean(fechaCorta(b.hasta)),
+  );
+  if (!url || bonos.length === 0) return;
+
+  if (bonos.length === 1) {
+    const bono = bonos[0];
+    centradoNegrilla(lines, `BONO VUELVE - ${bono.ruta}`, width);
+    centrado(lines, `${porcentaje(bono)}% en tu proxima visita, del ${fechaCorta(bono.desde)} al ${fechaCorta(bono.hasta)}`, width);
+  } else {
+    centradoNegrilla(lines, `GANASTE ${bonos.length} BONOS VUELVE`, width);
+    for (const bono of bonos) {
+      centrado(lines, `${bono.ruta}: ${porcentaje(bono)}% del ${fechaCorta(bono.desde)} al ${fechaCorta(bono.hasta)}`, width);
+    }
+  }
+
+  lines.push('');
+  // Mismo tamaño de módulo que el QR fiscal: ya probado en las impresoras de 58 y 80 mm
+  lines.push(qrMarker(url, width >= 42 ? 7 : 5));
+  lines.push('');
+  centradoNegrilla(lines, bonos.length === 1 ? 'Escanea y reclama tu bono' : 'Escanea y reclama tus bonos', width);
+
+  if (bonos.length === 1) {
+    const donde = dondeSeUsa(bonos[0]);
+    if (donde) centrado(lines, donde, width);
+    const tope = Number(bonos[0].tope) || 0;
+    if (tope > 0) centrado(lines, `Sobre max. $${formatMoney(tope)} de compra.`, width);
+  }
+
+  const terminos = sanitizeText(ticket?.terminos || '').trim();
+  if (terminos) {
+    centrado(lines, 'Aplican terminos y condiciones:', width);
+    for (const l of wrapUrl(terminos, width)) lines.push(center(l, width));
+  } else {
+    centrado(lines, 'Aplican terminos y condiciones.', width);
+  }
+  lines.push(center('Bonos por Foodly', width));
+}
+
+/**
+ * Parte una dirección por sus barras («carta.foodly.com.co/rutas/» +
+ * «ruta-sincelejo») para que en 58 mm no quede cortada a la mitad de una
+ * palabra. Un tramo que no cabe solo cae al corte por carácter.
+ */
+function wrapUrl(url: string, width: number): string[] {
+  if (url.length <= width) return [url];
+  const tramos = url.split(/(?<=\/)/);
+  const out: string[] = [];
+  let actual = '';
+  for (const tramo of tramos) {
+    if (tramo.length > width) {
+      if (actual) { out.push(actual); actual = ''; }
+      out.push(...wrap(tramo, width));
+      continue;
+    }
+    if ((actual + tramo).length > width) {
+      out.push(actual);
+      actual = tramo;
+    } else {
+      actual += tramo;
+    }
+  }
+  if (actual) out.push(actual);
+  return out;
+}
+
+function porcentaje(bono: BonoQrItem): string {
+  const pct = Number(bono.porcentaje) || 0;
+  return Number.isInteger(pct) ? String(pct) : pct.toLocaleString('es-CO', { maximumFractionDigits: 2 });
+}
+
+/** «En Siracha, Diverso o Don Parrilla.» — con más de 4, el total de la ruta. */
+function dondeSeUsa(bono: BonoQrItem): string {
+  const nombres = (bono.donde || []).map((n) => sanitizeText(n).trim()).filter(Boolean);
+  const total = Math.max(Number(bono.total_restaurantes) || 0, nombres.length);
+  if (total > 4 || total > nombres.length) return `En los ${total} restaurantes de la ruta.`;
+  if (nombres.length === 0) return '';
+  if (nombres.length === 1) return `En ${nombres[0]}.`;
+  return `En ${nombres.slice(0, -1).join(', ')} o ${nombres[nombres.length - 1]}.`;
+}
+
+/** Centra y destaca un texto, envuelto por palabras al ancho real */
+function centradoNegrilla(lines: string[], texto: string, width: number): void {
+  for (const l of wrapWords(sanitizeText(texto), width)) lines.push(negrilla(center(l, width)));
 }
 
 /** YYYY-MM-DD → dd/mm/aaaa, sin pasar por la zona del servidor */

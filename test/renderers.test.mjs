@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {
+  center,
   renderCierreCaja,
   renderComanda,
   renderCorreccion,
@@ -19,6 +20,7 @@ import {
   escBold,
   escCashDrawerPulse,
   escCut,
+  qrMarker,
   sanitizeText,
   textToEscPosBytes,
 } from '../dist/index.mjs';
@@ -1151,3 +1153,97 @@ assert.match(latin1(renderStickerPrueba({ empresa: 'Crokanza' })), /"PRUEBA DE S
 assert.equal(latin1(tsplBeep()), 'SOUND 5,200\r\n');
 
 console.log('OK — sticker de entrega TSPL (4 tamaños, QR, icono, nota, datos sin inyección)');
+
+// ── Bonos (4.16.0): el QR para reclamar el bono que ganó el pedido ──
+const bonoQr = {
+  url: 'https://carta.foodly.com.co/b/Ab3dEf6hIjK7mNoPqRsTuv',
+  terminos: 'carta.foodly.com.co/rutas/ruta-sincelejo',
+  bonos: [{
+    ruta: 'Ruta Sincelejo', porcentaje: 10, desde: '2026-11-06', hasta: '2026-12-03',
+    tope: 86000, donde: ['Siracha', 'Diverso', 'Don Parrilla'],
+  }],
+};
+for (const columns of [32, 48]) {
+  const t = renderFactura({ ...pedidoEfectivo, bono_qr: bonoQr }, { now, columns });
+  const plano = sinMarcas(t);
+  assert.ok(t.includes(qrMarker(bonoQr.url, columns >= 42 ? 7 : 5)), `el QR lleva la pagina del bono (${columns} col)`);
+  assert.match(plano, /BONO VUELVE - Ruta Sincelejo/);
+  assert.match(plano, /Escanea y reclama tu bono/);
+  assert.match(plano, /06\/11\/2026/);
+  assert.match(plano, /03\/12\/2026/);
+  const corrido = plano.replace(/\n\s*/g, ' ');
+  assert.match(corrido, /Siracha, Diverso o Don Parrilla\./);
+  assert.match(corrido, /Sobre max\. \$86\.000 de compra\./);
+  assert.match(plano, /Aplican terminos y condiciones:/);
+  assert.match(plano.replace(/\n\s*/g, ''), /carta\.foodly\.com\.co\/rutas\/ruta-sincelejo/);
+  assert.match(plano, /Bonos por Foodly/);
+  assert.doesNotMatch(plano, /K7MQ|codigo/i, 'el codigo del bono no se imprime');
+  const lineas = plano.split('\n');
+  const iBono = lineas.findIndex((l) => l.includes('BONO VUELVE'));
+  const iInterno = lineas.findIndex((l) => l.includes('SOLO PARA CONTROL INTERNO'));
+  const iGracias = lineas.findIndex((l) => l.includes('Gracias por su visita!'));
+  assert.ok(iInterno < iBono && iBono < iGracias, `el bono va despues del control interno y antes del agradecimiento (${columns} col)`);
+  for (let i = 1; i < lineas.length; i++) {
+    assert.ok(!(esRaya(lineas[i - 1]) && esRaya(lineas[i])), `rayas pegadas con bono (${columns} col), linea ${i}`);
+  }
+  for (const linea of lineas) {
+    if (linea.includes('\x1E')) continue;
+    assert.ok(linea.length <= columns, `linea de ${linea.length} > ${columns}: ${linea}`);
+  }
+  assert.ok(t.includes(`${escBold(true)}${center('Escanea y reclama tu bono', columns)}${escBold(false)}`), 'la invitacion a escanear va en negrilla');
+}
+
+// Sin bono la tirilla no cambia; un bono sin direccion, sin porcentaje o sin fechas tampoco se imprime
+const opts48 = { now, columns: 48 };
+assert.equal(renderFactura({ ...pedidoEfectivo, bono_qr: undefined }, opts48), renderFactura(pedidoEfectivo, opts48));
+assert.equal(renderFactura({ ...pedidoEfectivo, bono_qr: { ...bonoQr, url: '' } }, opts48), renderFactura(pedidoEfectivo, opts48));
+assert.equal(
+  renderFactura({ ...pedidoEfectivo, bono_qr: { ...bonoQr, bonos: [{ ...bonoQr.bonos[0], porcentaje: 0 }] } }, opts48),
+  renderFactura(pedidoEfectivo, opts48),
+);
+assert.equal(
+  renderFactura({ ...pedidoEfectivo, bono_qr: { ...bonoQr, bonos: [{ ...bonoQr.bonos[0], hasta: 'mañana' }] } }, opts48),
+  renderFactura(pedidoEfectivo, opts48),
+);
+
+// Más de 4 restaurantes: el total, no la lista; sin términos, la frase corta
+const rutaGrande = sinMarcas(renderFactura({
+  ...pedidoEfectivo,
+  bono_qr: { url: bonoQr.url, bonos: [{ ...bonoQr.bonos[0], donde: ['A', 'B', 'C', 'D'], total_restaurantes: 9 }] },
+}, opts48));
+assert.match(rutaGrande, /En los 9 restaurantes de la ruta\./);
+assert.match(rutaGrande, /Aplican terminos y condiciones\./);
+
+// Dos rutas: un solo QR y una línea por bono con sus fechas
+const dosBonos = {
+  url: bonoQr.url,
+  terminos: 'carta.foodly.com.co/rutas',
+  bonos: [
+    bonoQr.bonos[0],
+    { ruta: 'Ruta Foodly', porcentaje: 5, desde: '2026-11-06', hasta: '2026-11-19', tope: 86000, total_restaurantes: 18 },
+  ],
+};
+for (const columns of [32, 48]) {
+  const t = renderFactura({ ...pedidoEfectivo, bono_qr: dosBonos }, { now, columns });
+  const plano = sinMarcas(t);
+  assert.equal(t.split('\x1E').length, 3, `un solo QR para los dos bonos (${columns} col)`);
+  assert.match(plano, /GANASTE 2 BONOS VUELVE/);
+  assert.match(plano.replace(/\n\s*/g, ' '), /Ruta Sincelejo: 10% del 06\/11\/2026 al 03\/12\/2026/);
+  assert.match(plano.replace(/\n\s*/g, ' '), /Ruta Foodly: 5% del 06\/11\/2026 al 19\/11\/2026/);
+  assert.match(plano, /Escanea y reclama tus bonos/);
+  for (const linea of plano.split('\n')) {
+    if (linea.includes('\x1E')) continue;
+    assert.ok(linea.length <= columns, `linea de ${linea.length} > ${columns}: ${linea}`);
+  }
+}
+
+// Con documento electrónico el bono va DESPUÉS del bloque fiscal y su QR, que no se toca
+const fiscalConBono = sinMarcas(renderFactura({ ...tirillaFoto, bono_qr: bonoQr }, opts48));
+const lineasFiscal = fiscalConBono.split('\n');
+const iDoble = lineasFiscal.findIndex((l) => /^=+$/.test(l));
+const iBonoFiscal = lineasFiscal.findIndex((l) => l.includes('BONO VUELVE'));
+assert.ok(iDoble > 0 && iBonoFiscal > iDoble, 'el bono sale despues del bloque fiscal');
+assert.equal(fiscalConBono.split('\x1E').length, 5, 'dos QR: el fiscal y el del bono');
+assert.match(renderFactura({ ...tirillaFoto, bono_qr: bonoQr }, opts48), /\n{5}$/, 'conserva el avance al corte');
+
+console.log('OK — bono con QR (1 y 2 rutas, 32/48 col, despues de lo fiscal, sin el codigo)');

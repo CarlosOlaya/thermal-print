@@ -1,4 +1,4 @@
-export type { CreditoTicket, FacturaCerradaPayload, FacturaElectronicaTicket, ItemEvento, PagoEventoItem, ThermalComandaItem, ThermalComandaPayload, ThermalDocumentPayload, ThermalInventarioItem, ThermalReciboAbonoPayload, ThermalRenderOptions, ThermalReservaItem, ThermalReservasDiaPayload, ThermalTomaInventarioPayload, } from './types';
+export type { BonoQrItem, BonoQrTicket, CreditoTicket, FacturaCerradaPayload, FacturaElectronicaTicket, ItemEvento, PagoEventoItem, ThermalComandaItem, ThermalComandaPayload, ThermalDocumentPayload, ThermalInventarioItem, ThermalReciboAbonoPayload, ThermalRenderOptions, ThermalReservaItem, ThermalReservasDiaPayload, ThermalTomaInventarioPayload, } from './types';
 export { ESC, escBeep, escBold, escCashDrawerPulse, escCut, escFontSize, escLeftMargin, qrMarker, textToEscPosBytes, type EscPosByteOptions, } from './escpos';
 export { center, formatDate, formatMoney, formatTime, labelMetodo, leftRight, sanitizeText } from './utils';
 export { renderComanda, renderComandaAnulacion } from './renderers/comanda';

@@ -763,6 +763,12 @@ function renderFactura(factura, options = {}) {
     lines.push(sep);
     lines.push(center("** SOLO PARA CONTROL INTERNO **", width));
   }
+  const bono = [];
+  renderBonoQr(bono, factura, width);
+  if (bono.length > 0) {
+    lines.push(sep);
+    lines.push(...bono);
+  }
   lines.push(center("Gracias por su visita!", width));
   if (fiscal?.software) {
     lines.push(...AVANCE_CORTE);
@@ -928,7 +934,7 @@ function renderItemsFiscales(lines, items, width) {
     const cantidad = Number(item.cantidad) || 1;
     const precio = Number(item.precio_unitario) || 0;
     const descuento = Number(item.descuento_monto) || 0;
-    const porcentaje = Number(item.descuento_porcentaje) || 0;
+    const porcentaje2 = Number(item.descuento_porcentaje) || 0;
     const neto = item.es_cortesia ? 0 : Math.max(0, precio * cantidad - descuento);
     const nombre = sanitizeText(item.nombre || item.plato || "");
     if (ancho) {
@@ -946,7 +952,7 @@ function renderItemsFiscales(lines, items, width) {
       item.codigo ? `Cod ${sanitizeText(item.codigo)}` : "",
       item.unidad ? sanitizeText(item.unidad) : ""
     ].filter(Boolean).join(" ");
-    const marca = item.es_cortesia ? "** CORTESIA **" : descuento > 0 ? ancho && porcentaje > 0 ? `Dcto -${porcentaje}% (-$${formatMoney(descuento)})` : `Dcto (-$${formatMoney(descuento)})` : "";
+    const marca = item.es_cortesia ? "** CORTESIA **" : descuento > 0 ? ancho && porcentaje2 > 0 ? `Dcto -${porcentaje2}% (-$${formatMoney(descuento)})` : `Dcto (-$${formatMoney(descuento)})` : "";
     const sangria = ancho ? "      " : "   ";
     const juntos = [identificacion, marca].filter(Boolean).join("  ");
     if (juntos && sangria.length + juntos.length <= width) {
@@ -1081,6 +1087,81 @@ function renderCredito(lines, factura, width) {
   }
   lines.push("");
   lines.push(`Firma: ${"_".repeat(Math.max(10, width - 8))}`);
+}
+function renderBonoQr(lines, factura, width) {
+  const ticket = factura.bono_qr;
+  const url = typeof ticket?.url === "string" ? ticket.url.trim() : "";
+  const bonos = (ticket?.bonos || []).filter(
+    (b) => Boolean(b) && Number(b.porcentaje) > 0 && Boolean(fechaCorta(b.desde)) && Boolean(fechaCorta(b.hasta))
+  );
+  if (!url || bonos.length === 0) return;
+  if (bonos.length === 1) {
+    const bono = bonos[0];
+    centradoNegrilla(lines, `BONO VUELVE - ${bono.ruta}`, width);
+    centrado(lines, `${porcentaje(bono)}% en tu proxima visita, del ${fechaCorta(bono.desde)} al ${fechaCorta(bono.hasta)}`, width);
+  } else {
+    centradoNegrilla(lines, `GANASTE ${bonos.length} BONOS VUELVE`, width);
+    for (const bono of bonos) {
+      centrado(lines, `${bono.ruta}: ${porcentaje(bono)}% del ${fechaCorta(bono.desde)} al ${fechaCorta(bono.hasta)}`, width);
+    }
+  }
+  lines.push("");
+  lines.push(qrMarker(url, width >= 42 ? 7 : 5));
+  lines.push("");
+  centradoNegrilla(lines, bonos.length === 1 ? "Escanea y reclama tu bono" : "Escanea y reclama tus bonos", width);
+  if (bonos.length === 1) {
+    const donde = dondeSeUsa(bonos[0]);
+    if (donde) centrado(lines, donde, width);
+    const tope = Number(bonos[0].tope) || 0;
+    if (tope > 0) centrado(lines, `Sobre max. $${formatMoney(tope)} de compra.`, width);
+  }
+  const terminos = sanitizeText(ticket?.terminos || "").trim();
+  if (terminos) {
+    centrado(lines, "Aplican terminos y condiciones:", width);
+    for (const l of wrapUrl(terminos, width)) lines.push(center(l, width));
+  } else {
+    centrado(lines, "Aplican terminos y condiciones.", width);
+  }
+  lines.push(center("Bonos por Foodly", width));
+}
+function wrapUrl(url, width) {
+  if (url.length <= width) return [url];
+  const tramos = url.split(/(?<=\/)/);
+  const out = [];
+  let actual = "";
+  for (const tramo of tramos) {
+    if (tramo.length > width) {
+      if (actual) {
+        out.push(actual);
+        actual = "";
+      }
+      out.push(...wrap(tramo, width));
+      continue;
+    }
+    if ((actual + tramo).length > width) {
+      out.push(actual);
+      actual = tramo;
+    } else {
+      actual += tramo;
+    }
+  }
+  if (actual) out.push(actual);
+  return out;
+}
+function porcentaje(bono) {
+  const pct = Number(bono.porcentaje) || 0;
+  return Number.isInteger(pct) ? String(pct) : pct.toLocaleString("es-CO", { maximumFractionDigits: 2 });
+}
+function dondeSeUsa(bono) {
+  const nombres = (bono.donde || []).map((n) => sanitizeText(n).trim()).filter(Boolean);
+  const total = Math.max(Number(bono.total_restaurantes) || 0, nombres.length);
+  if (total > 4 || total > nombres.length) return `En los ${total} restaurantes de la ruta.`;
+  if (nombres.length === 0) return "";
+  if (nombres.length === 1) return `En ${nombres[0]}.`;
+  return `En ${nombres.slice(0, -1).join(", ")} o ${nombres[nombres.length - 1]}.`;
+}
+function centradoNegrilla(lines, texto2, width) {
+  for (const l of wrapWords(sanitizeText(texto2), width)) lines.push(negrilla(center(l, width)));
 }
 function fechaCorta(iso) {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));

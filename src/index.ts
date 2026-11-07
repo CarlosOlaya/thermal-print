@@ -1,4 +1,6 @@
 export type {
+  BonoQrItem,
+  BonoQrTicket,
   CreditoTicket,
   FacturaCerradaPayload,
   FacturaElectronicaTicket,
