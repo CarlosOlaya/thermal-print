@@ -1182,7 +1182,10 @@ for (const columns of [32, 48]) {
   const iBono = lineas.findIndex((l) => l.includes('BONO VUELVE'));
   const iInterno = lineas.findIndex((l) => l.includes('SOLO PARA CONTROL INTERNO'));
   const iGracias = lineas.findIndex((l) => l.includes('Gracias por su visita!'));
-  assert.ok(iInterno < iBono && iBono < iGracias, `el bono va despues del control interno y antes del agradecimiento (${columns} col)`);
+  const iTotal = lineas.findIndex((l) => /TOTAL/.test(l));
+  const iBonosPorFoodly = lineas.findIndex((l) => l.includes('Bonos por Foodly'));
+  assert.ok(iTotal < iBono, `el bono va despues del total (${columns} col)`);
+  assert.ok(iBonosPorFoodly < iInterno && iInterno < iGracias, `sin FE el control interno cierra la tirilla: despues del bono y antes del agradecimiento (${columns} col)`);
   for (let i = 1; i < lineas.length; i++) {
     assert.ok(!(esRaya(lineas[i - 1]) && esRaya(lineas[i])), `rayas pegadas con bono (${columns} col), linea ${i}`);
   }

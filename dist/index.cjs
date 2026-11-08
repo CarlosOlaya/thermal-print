@@ -759,15 +759,16 @@ function renderFactura(factura, options = {}) {
   if (fiscal) {
     lines.push("=".repeat(width));
     renderFiscal(lines, fiscal, width);
-  } else {
-    lines.push(sep);
-    lines.push(center("** SOLO PARA CONTROL INTERNO **", width));
   }
   const bono = [];
   renderBonoQr(bono, factura, width);
   if (bono.length > 0) {
     lines.push(sep);
     lines.push(...bono);
+  }
+  if (!fiscal) {
+    lines.push(sep);
+    lines.push(center("** SOLO PARA CONTROL INTERNO **", width));
   }
   lines.push(center("Gracias por su visita!", width));
   if (fiscal?.software) {

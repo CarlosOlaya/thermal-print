@@ -76,9 +76,6 @@ export function renderFactura(factura: FacturaCerradaPayload, options: ThermalRe
   if (fiscal) {
     lines.push('='.repeat(width));
     renderFiscal(lines, fiscal, width);
-  } else {
-    lines.push(sep);
-    lines.push(center('** SOLO PARA CONTROL INTERNO **', width));
   }
   // El bono va DESPUÉS de lo fiscal: es publicidad del restaurante, no parte
   // de lo que se le declaró a la DIAN.
@@ -87,6 +84,12 @@ export function renderFactura(factura: FacturaCerradaPayload, options: ThermalRe
   if (bono.length > 0) {
     lines.push(sep);
     lines.push(...bono);
+  }
+  // Sin documento electrónico la marca cierra la tirilla: entre el total y el
+  // QR del bono partía el pedido en dos (2026-11-08, Carlos).
+  if (!fiscal) {
+    lines.push(sep);
+    lines.push(center('** SOLO PARA CONTROL INTERNO **', width));
   }
   lines.push(center('Gracias por su visita!', width));
   // El pie de marca ("Desarrollado por …") sobra cuando el bloque fiscal ya
