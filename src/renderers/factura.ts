@@ -6,7 +6,7 @@ import type {
   PagoEventoItem,
   ThermalRenderOptions,
 } from '../types';
-import { escBold, qrMarker } from '../escpos';
+import { escBold, escCut, qrMarker } from '../escpos';
 import {
   AVANCE_CORTE,
   center,
@@ -76,18 +76,7 @@ export function renderFactura(factura: FacturaCerradaPayload, options: ThermalRe
   if (fiscal) {
     lines.push('='.repeat(width));
     renderFiscal(lines, fiscal, width);
-  }
-  // El bono va DESPUÉS de lo fiscal: es publicidad del restaurante, no parte
-  // de lo que se le declaró a la DIAN.
-  const bono: string[] = [];
-  renderBonoQr(bono, factura, width);
-  if (bono.length > 0) {
-    lines.push(sep);
-    lines.push(...bono);
-  }
-  // Sin documento electrónico la marca cierra la tirilla: entre el total y el
-  // QR del bono partía el pedido en dos (2026-11-08, Carlos).
-  if (!fiscal) {
+  } else {
     lines.push(sep);
     lines.push(center('** SOLO PARA CONTROL INTERNO **', width));
   }
@@ -102,6 +91,18 @@ export function renderFactura(factura: FacturaCerradaPayload, options: ThermalRe
     lines.push(...AVANCE_CORTE);
   } else {
     lines.push(footer(width, options.footer));
+  }
+
+  // El bono sale en un RECORTE APARTE, después de un corte (Carlos, 2026-11-08):
+  // la tirilla del pedido queda igual que siempre y el restaurante se la guarda
+  // para el cuadre del día; el comensal se lleva solo el QR. Sin cortador, el
+  // avance de papel deja dónde rasgar. El corte final lo pone el puente.
+  const bono: string[] = [];
+  renderBonoQr(bono, factura, width);
+  if (bono.length > 0) {
+    lines.push(escCut());
+    lines.push(...bono);
+    lines.push(...AVANCE_CORTE);
   }
 
   return lines.join('\n');

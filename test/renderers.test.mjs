@@ -1178,14 +1178,15 @@ for (const columns of [32, 48]) {
   assert.match(plano.replace(/\n\s*/g, ''), /carta\.foodly\.com\.co\/rutas\/ruta-sincelejo/);
   assert.match(plano, /Bonos por Foodly/);
   assert.doesNotMatch(plano, /K7MQ|codigo/i, 'el codigo del bono no se imprime');
+  // La tirilla del pedido sale IDÉNTICA a la de siempre (el restaurante se la guarda
+  // para el cuadre); después un corte y el bono en su propio recorte.
+  const sinBono = renderFactura(pedidoEfectivo, { now, columns });
+  assert.ok(t.startsWith(`${sinBono}\n${escCut()}\n`), `la tirilla queda igual y el bono va despues de un corte (${columns} col)`);
+  const recorte = sinMarcas(t.slice(sinBono.length));
+  assert.match(recorte, /BONO VUELVE/);
+  assert.doesNotMatch(recorte, /CONTROL INTERNO|TOTAL|Gracias/, `el recorte del bono no repite nada del pedido (${columns} col)`);
+  assert.match(t, /\n{5}$/, 'el recorte deja el avance al corte');
   const lineas = plano.split('\n');
-  const iBono = lineas.findIndex((l) => l.includes('BONO VUELVE'));
-  const iInterno = lineas.findIndex((l) => l.includes('SOLO PARA CONTROL INTERNO'));
-  const iGracias = lineas.findIndex((l) => l.includes('Gracias por su visita!'));
-  const iTotal = lineas.findIndex((l) => /TOTAL/.test(l));
-  const iBonosPorFoodly = lineas.findIndex((l) => l.includes('Bonos por Foodly'));
-  assert.ok(iTotal < iBono, `el bono va despues del total (${columns} col)`);
-  assert.ok(iBonosPorFoodly < iInterno && iInterno < iGracias, `sin FE el control interno cierra la tirilla: despues del bono y antes del agradecimiento (${columns} col)`);
   for (let i = 1; i < lineas.length; i++) {
     assert.ok(!(esRaya(lineas[i - 1]) && esRaya(lineas[i])), `rayas pegadas con bono (${columns} col), linea ${i}`);
   }
@@ -1246,7 +1247,8 @@ const lineasFiscal = fiscalConBono.split('\n');
 const iDoble = lineasFiscal.findIndex((l) => /^=+$/.test(l));
 const iBonoFiscal = lineasFiscal.findIndex((l) => l.includes('BONO VUELVE'));
 assert.ok(iDoble > 0 && iBonoFiscal > iDoble, 'el bono sale despues del bloque fiscal');
+assert.ok(renderFactura({ ...tirillaFoto, bono_qr: bonoQr }, opts48).startsWith(`${renderFactura(tirillaFoto, opts48)}\n${escCut()}\n`), 'con FE la tirilla fiscal queda igual y el bono va en su recorte');
 assert.equal(fiscalConBono.split('\x1E').length, 5, 'dos QR: el fiscal y el del bono');
 assert.match(renderFactura({ ...tirillaFoto, bono_qr: bonoQr }, opts48), /\n{5}$/, 'conserva el avance al corte');
 
-console.log('OK — bono con QR (1 y 2 rutas, 32/48 col, despues de lo fiscal, sin el codigo)');
+console.log('OK — bono con QR en recorte aparte (1 y 2 rutas, 32/48 col, tirilla intacta, con y sin FE, sin el codigo)');

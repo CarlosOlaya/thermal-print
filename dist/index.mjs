@@ -702,14 +702,7 @@ function renderFactura(factura, options = {}) {
   if (fiscal) {
     lines.push("=".repeat(width));
     renderFiscal(lines, fiscal, width);
-  }
-  const bono = [];
-  renderBonoQr(bono, factura, width);
-  if (bono.length > 0) {
-    lines.push(sep);
-    lines.push(...bono);
-  }
-  if (!fiscal) {
+  } else {
     lines.push(sep);
     lines.push(center("** SOLO PARA CONTROL INTERNO **", width));
   }
@@ -718,6 +711,13 @@ function renderFactura(factura, options = {}) {
     lines.push(...AVANCE_CORTE);
   } else {
     lines.push(footer(width, options.footer));
+  }
+  const bono = [];
+  renderBonoQr(bono, factura, width);
+  if (bono.length > 0) {
+    lines.push(escCut());
+    lines.push(...bono);
+    lines.push(...AVANCE_CORTE);
   }
   return lines.join("\n");
 }
