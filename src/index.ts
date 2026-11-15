@@ -4,6 +4,7 @@ export type {
   CreditoTicket,
   FacturaCerradaPayload,
   FacturaElectronicaTicket,
+  ImpuestoTarifaTicket,
   ItemEvento,
   PagoEventoItem,
   ThermalComandaItem,

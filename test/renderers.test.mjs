@@ -409,6 +409,89 @@ for (const w of [32, 48]) {
   assert.ok(hasQr, `QR nativo ausente en ${w} col`);
 }
 
+// ── Desglose por tarifa (productos con impuestos distintos) ───────────────
+// Con DOS o más filas en `fe.impuestos` la tirilla cambia el bloque «BASE
+// GRAVABLE / IVA 19%» por una tabla y cada producto lleva la letra de su fila.
+// Con una o ninguna, sale EXACTAMENTE como siempre.
+{
+  const itemsMixtos = [
+    { cantidad: 1, nombre: 'Shampoo 400 ml', precio_unitario: 23700, codigo: '5f3a91c2', unidad: 'UND', letra_impuesto: 'A' },
+    { cantidad: 1, nombre: 'Producto al 5 %', precio_unitario: 10700, codigo: '8b21d0aa', unidad: 'UND', letra_impuesto: 'B' },
+    { cantidad: 2, nombre: 'Producto exento', precio_unitario: 8300, codigo: 'c07e44f1', unidad: 'UND', letra_impuesto: 'C' },
+    { cantidad: 1, nombre: 'Ibuprofeno 400 mg x 10', precio_unitario: 6200, codigo: '19de7b30', unidad: 'UND', letra_impuesto: 'D' },
+  ];
+  const impuestos = [
+    { letra: 'A', nombre: 'IVA 19%', base: 19915.97, monto: 3784.03 },
+    { letra: 'B', nombre: 'IVA 5%', base: 10190.48, monto: 509.52 },
+    { letra: 'C', nombre: 'Exento', base: 16600, monto: 0 },
+    { letra: 'D', nombre: 'Excluido', base: 6200 },
+  ];
+  const venta = { tenant_nombre: 'Drogueria Prueba', numero_factura: 'PED-00128', items: itemsMixtos, subtotal: 57200, total: 57200, metodo_pago: 'efectivo' };
+  const esperado = {
+    32: [
+      ' 1 1x Shampoo 400 ml   A $23.700',
+      ' 4 1x Ibuprofeno 400 mg D $6.200',
+      'SUBTOTAL:                $57.200',
+      'IMPUESTOS        BASE      VALOR',
+      'A IVA 19%   19.915,97   3.784,03',
+      'B IVA 5%    10.190,48     509,52',
+      'C Exento    16.600,00       0,00',
+      'D Excluido   6.200,00',
+      'TOTAL IMPUESTOS:       $4.293,55',
+    ],
+    48: [
+      ' 1    1 Shampoo 400 ml       A   23.700   23.700',
+      ' 4    1 Ibuprofeno 400 mg x  D    6.200    6.200',
+      'SUBTOTAL:                                $57.200',
+      'IMPUESTOS                   BASE           VALOR',
+      'A IVA 19%              19.915,97        3.784,03',
+      'D Excluido              6.200,00',
+      'TOTAL IMPUESTOS:                       $4.293,55',
+    ],
+  };
+  const sinControl = (texto) => texto.replace(/\x1b./g, '').replace(/[\x00-\x09\x0b-\x1f]/g, '');
+  for (const w of [32, 48]) {
+    const mixta = renderFactura({ ...venta, fe: { ...feTicket, impuestos } }, { now, columns: w });
+    const filas = mixta.split('\n');
+    for (const fila of esperado[w]) {
+      assert.ok(filas.includes(fila), `falta la fila del desglose (${w} col): «${fila}»`);
+    }
+    // La tabla va pegada: subtotal, tabla, total de impuestos y total del pedido, sin rayas ni blancos.
+    const desde = filas.indexOf(esperado[w].find(f => f.startsWith('SUBTOTAL')));
+    assert.match(filas[desde + 1], /^IMPUESTOS/, `la tabla no sigue al subtotal (${w} col)`);
+    assert.match(filas[desde + 6], /^TOTAL IMPUESTOS:/, `el total de impuestos no cierra la tabla (${w} col)`);
+    assert.match(filas[desde + 7], /TOTAL PEDIDO:/, `el total del pedido no sigue a la tabla (${w} col)`);
+    assert.doesNotMatch(mixta, /BASE GRAVABLE/, `el bloque de una sola tarifa convive con la tabla (${w} col)`);
+    // Ninguna fila del detalle ni de la tabla se pasa del ancho del papel.
+    for (const fila of filas.slice(0, desde + 8)) {
+      assert.ok(sinControl(fila).length <= w, `fila más ancha que el papel (${w} col): «${fila}»`);
+    }
+    // El total que paga el cliente no cambia: el impuesto se separa, no se suma.
+    assert.match(mixta, /TOTAL PEDIDO: +\$ 57\.200/);
+
+    // Un solo impuesto (o ninguno): la tirilla es la de siempre, letra por letra,
+    // aunque los ítems traigan su letra.
+    const unaTarifa = { label: 'IVA', tarifa: 19, base: 48067.23, monto: 9132.77 };
+    const deSiempre = renderFactura({ ...venta, items: itemsMixtos.map(({ letra_impuesto, ...i }) => i), fe: { ...feTicket, impuesto: unaTarifa } }, { now, columns: w });
+    const conUnaFila = renderFactura({ ...venta, fe: { ...feTicket, impuesto: unaTarifa, impuestos: [impuestos[0]] } }, { now, columns: w });
+    assert.equal(conUnaFila, deSiempre, `una sola fila de impuestos cambió la tirilla de siempre (${w} col)`);
+    assert.match(deSiempre, /BASE GRAVABLE:/);
+    assert.doesNotMatch(deSiempre, /^IMPUESTOS/m);
+  }
+
+  // Bases que no caben con centavos en 58 mm: se imprimen en pesos, sin pasarse.
+  const grande = renderFactura({
+    ...venta,
+    fe: { ...feTicket, impuestos: [
+      { letra: 'A', nombre: 'IVA 19%', base: 12345678.9, monto: 2345678.99 },
+      { letra: 'B', nombre: 'Excluido', base: 500000 },
+    ] },
+  }, { now, columns: 32 });
+  const filaGrande = grande.split('\n').find(f => f.startsWith('A IVA 19%'));
+  assert.ok(filaGrande && filaGrande.length <= 32, `la fila con valores grandes se pasa del papel: «${filaGrande}»`);
+  assert.match(filaGrande, /12\.345\.679/);
+}
+
 // ── Impuesto discriminado (INC/IVA) ────────────────────────────────────────
 // El precio de carta YA lo incluye (Art. 512-9 ET): la tirilla lo SEPARA, no
 // lo suma. El total tiene que quedar igualito al que pagó el comensal.

@@ -62,6 +62,11 @@ export interface ItemEvento {
     codigo?: string;
     /** Unidad de medida corta, ej. "UND" (art. 11 num. 8) */
     unidad?: string;
+    /**
+     * Letra de la fila de `fe.impuestos` que le corresponde al ítem. Solo se
+     * imprime cuando el documento trae el desglose por tarifa (v4.17.0+).
+     */
+    letra_impuesto?: string;
 }
 export interface FacturaCerradaPayload {
     id?: string;
@@ -197,6 +202,17 @@ export interface ThermalReciboAbonoPayload extends Record<string, unknown> {
     /** Copia impresa después: lo dice el encabezado */
     reimpresion?: boolean;
 }
+/** Una fila del desglose de impuestos de la tirilla fiscal. */
+export interface ImpuestoTarifaTicket {
+    /** Letra que la une con sus productos: "A", "B"… */
+    letra: string;
+    /** Texto corto de la fila: "IVA 19%", "INC 8%", "Exento", "Excluido" */
+    nombre: string;
+    /** Base declarada en esa tarifa (para el excluido, su valor) */
+    base: number;
+    /** Impuesto. Ausente = excluido: no se declara impuesto, la celda va vacía. */
+    monto?: number;
+}
 export interface FacturaElectronicaTicket {
     /** Ej. "FACTURA ELECTRONICA DE VENTA" / "DOCUMENTO EQUIVALENTE POS" */
     tipo_label: string;
@@ -246,6 +262,13 @@ export interface FacturaElectronicaTicket {
         /** Monto del impuesto */
         monto: number;
     };
+    /**
+     * Desglose por tarifa cuando el documento tiene productos con impuestos
+     * distintos (IVA 19 %, IVA 5 %, exentos, excluidos). Con DOS o más filas
+     * reemplaza al bloque de `impuesto` por una tabla y cada ítem imprime su
+     * letra; con una o ninguna la tirilla sale como siempre. v4.17.0+.
+     */
+    impuestos?: ImpuestoTarifaTicket[];
     /**
      * Emisor tal como se declaró a la DIAN (art. 11 num. 2 Res. 000165/2023). El
      * nombre del restaurante en Foodly suele ser el comercial; la norma pide la

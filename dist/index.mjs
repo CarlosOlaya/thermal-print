@@ -688,7 +688,7 @@ function renderFactura(factura, options = {}) {
   datos.push(`Mesero: ${sanitizeText(factura.mesero || "")}`);
   renderCliente(datos, factura);
   const detalle = [];
-  if (fiscal) renderItemsFiscales(detalle, factura.items || [], width);
+  if (fiscal) renderItemsFiscales(detalle, factura.items || [], width, desgloseImpuestos(factura) !== null);
   else renderItems(detalle, factura.items || [], width);
   const totales = [];
   renderTotals(totales, factura, width);
@@ -864,7 +864,7 @@ function renderItems(lines, items, width) {
     }
   }
 }
-function renderItemsFiscales(lines, items, width) {
+function renderItemsFiscales(lines, items, width, conLetras = false) {
   if (!items.length) return;
   const ancho = width >= 42;
   const anchoNombre = Math.max(8, width - 26);
@@ -875,6 +875,7 @@ function renderItemsFiscales(lines, items, width) {
   }
   items.forEach((item, indice) => {
     const numero = String(indice + 1).padStart(2, " ");
+    const letra = conLetras ? sanitizeText(item.letra_impuesto || "").substring(0, 1) : "";
     const cantidad = Number(item.cantidad) || 1;
     const precio = Number(item.precio_unitario) || 0;
     const descuento = Number(item.descuento_monto) || 0;
@@ -883,14 +884,22 @@ function renderItemsFiscales(lines, items, width) {
     const nombre = sanitizeText(item.nombre || item.plato || "");
     if (ancho) {
       const total = item.es_cortesia ? "$0" : formatMoney(neto);
+      const anchoTexto = letra ? anchoNombre - 2 : anchoNombre;
+      const texto2 = nombre.substring(0, anchoTexto).padEnd(anchoTexto, " ") + (letra ? ` ${letra}` : "");
       lines.push(
-        `${numero} ${String(cantidad).padStart(4, " ")} ${nombre.substring(0, anchoNombre).padEnd(anchoNombre, " ")} ${rightPadMoney(formatMoney(precio), 8)} ${rightPadMoney(total, 8)}`
+        `${numero} ${String(cantidad).padStart(4, " ")} ${texto2} ${rightPadMoney(formatMoney(precio), 8)} ${rightPadMoney(total, 8)}`
       );
     } else {
       const derecha = `$${formatMoney(neto)}`;
       const izquierda = `${numero} ${cantidad}x `;
-      const maxNombre = Math.max(4, width - izquierda.length - derecha.length - 1);
-      lines.push(leftRight(`${izquierda}${nombre.substring(0, maxNombre)}`, derecha, width));
+      if (letra) {
+        const hueco = width - derecha.length - 3;
+        const maxNombre = Math.max(4, hueco - izquierda.length);
+        lines.push(`${`${izquierda}${nombre.substring(0, maxNombre)}`.padEnd(hueco, " ")} ${letra} ${derecha}`);
+      } else {
+        const maxNombre = Math.max(4, width - izquierda.length - derecha.length - 1);
+        lines.push(leftRight(`${izquierda}${nombre.substring(0, maxNombre)}`, derecha, width));
+      }
     }
     const identificacion = [
       item.codigo ? `Cod ${sanitizeText(item.codigo)}` : "",
@@ -952,7 +961,8 @@ function renderTotals(lines, factura, width) {
   const servicio = Number(factura.propina) || 0;
   const total = Number(factura.total) || 0;
   const imp = factura.fe?.impuesto;
-  const conImpuesto = Boolean(imp && imp.monto > 0);
+  const desglose = desgloseImpuestos(factura);
+  const conImpuesto = Boolean(desglose || imp && imp.monto > 0);
   if (descMesa > 0 || iva > 0 || conImpuesto || servicio > 0 || subtotalVisible !== total) {
     lines.push(leftRight("SUBTOTAL:", `$${formatMoney(subtotalVisible)}`, width));
   }
@@ -963,7 +973,9 @@ function renderTotals(lines, factura, width) {
     lines.push(leftRight("NETO:", `$${formatMoney(factura.subtotal)}`, width));
   }
   if (iva > 0) lines.push(leftRight("IVA:", `$${formatMoney(iva)}`, width));
-  if (imp && imp.monto > 0) {
+  if (desglose) {
+    renderDesgloseImpuestos(lines, desglose, width);
+  } else if (imp && imp.monto > 0) {
     lines.push(leftRight("BASE GRAVABLE:", `$${formatMoney(imp.base)}`, width));
     lines.push(leftRight(`${imp.label} ${imp.tarifa}%:`, `$${formatMoney(imp.monto)}`, width));
   }
@@ -978,6 +990,35 @@ function renderTotals(lines, factura, width) {
   } else {
     lines.push(negrilla(totalPedido));
   }
+}
+function desgloseImpuestos(factura) {
+  const filas = factura.fe?.impuestos;
+  return Array.isArray(filas) && filas.length > 1 ? filas : null;
+}
+function conCentavos(valor) {
+  return (Number(valor) || 0).toLocaleString("es-CO", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+function valorEnColumna(valor, ancho) {
+  const texto2 = conCentavos(valor);
+  return rightPadMoney(texto2.length < ancho ? texto2 : formatMoney(Math.round(Number(valor) || 0)), ancho);
+}
+function renderDesgloseImpuestos(lines, filas, width) {
+  const [anchoBase, anchoValor] = width >= 42 ? [14, 16] : [10, 11];
+  const anchoNombre = Math.max(8, width - anchoBase - anchoValor);
+  lines.push(`${"IMPUESTOS".padEnd(anchoNombre, " ")}${"BASE".padStart(anchoBase, " ")}${"VALOR".padStart(anchoValor, " ")}`);
+  let total = 0;
+  for (const fila of filas) {
+    const nombre = `${sanitizeText(fila.letra).substring(0, 1)} ${sanitizeText(fila.nombre)}`;
+    const excluido = fila.monto === void 0 || fila.monto === null;
+    total += excluido ? 0 : Number(fila.monto) || 0;
+    lines.push(
+      (nombre.substring(0, anchoNombre).padEnd(anchoNombre, " ") + valorEnColumna(fila.base, anchoBase) + (excluido ? "" : valorEnColumna(Number(fila.monto) || 0, anchoValor))).trimEnd()
+    );
+  }
+  lines.push(leftRight("TOTAL IMPUESTOS:", `$${conCentavos(total)}`, width));
 }
 function renderPayments(lines, factura, width) {
   const payments = factura.pagos || [];

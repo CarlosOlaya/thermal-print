@@ -2,6 +2,7 @@ import type {
   BonoQrItem,
   FacturaCerradaPayload,
   FacturaElectronicaTicket,
+  ImpuestoTarifaTicket,
   ItemEvento,
   PagoEventoItem,
   ThermalRenderOptions,
@@ -51,7 +52,7 @@ export function renderFactura(factura: FacturaCerradaPayload, options: ThermalRe
   renderCliente(datos, factura);
 
   const detalle: string[] = [];
-  if (fiscal) renderItemsFiscales(detalle, factura.items || [], width);
+  if (fiscal) renderItemsFiscales(detalle, factura.items || [], width, desgloseImpuestos(factura) !== null);
   else renderItems(detalle, factura.items || [], width);
 
   const totales: string[] = [];
@@ -331,7 +332,7 @@ function renderItems(lines: string[], items: ItemEvento[], width: number): void 
  * Para no gastar papel, el código comparte renglón con el descuento o la
  * cortesía cuando caben juntos en el ancho.
  */
-function renderItemsFiscales(lines: string[], items: ItemEvento[], width: number): void {
+function renderItemsFiscales(lines: string[], items: ItemEvento[], width: number, conLetras = false): void {
   if (!items.length) return;
   const ancho = width >= 42;
   // # (2) · cantidad (4) · nombre · precio (8) · total (8), con un espacio entre columnas
@@ -343,8 +344,11 @@ function renderItemsFiscales(lines: string[], items: ItemEvento[], width: number
     lines.push(leftRight(' # CANT PRODUCTO', 'TOTAL', width));
   }
 
+  // `conLetras`: productos con impuestos distintos ⇒ cada ítem lleva la letra
+  // de su fila del desglose. Con un solo impuesto no hay tabla ni letras.
   items.forEach((item, indice) => {
     const numero = String(indice + 1).padStart(2, ' ');
+    const letra = conLetras ? sanitizeText(item.letra_impuesto || '').substring(0, 1) : '';
     const cantidad = Number(item.cantidad) || 1;
     const precio = Number(item.precio_unitario) || 0;
     const descuento = Number(item.descuento_monto) || 0;
@@ -354,15 +358,24 @@ function renderItemsFiscales(lines: string[], items: ItemEvento[], width: number
 
     if (ancho) {
       const total = item.es_cortesia ? '$0' : formatMoney(neto);
+      // La letra le quita dos columnas al nombre; el resto de la fila no se mueve.
+      const anchoTexto = letra ? anchoNombre - 2 : anchoNombre;
+      const texto = nombre.substring(0, anchoTexto).padEnd(anchoTexto, ' ') + (letra ? ` ${letra}` : '');
       lines.push(
-        `${numero} ${String(cantidad).padStart(4, ' ')} ${nombre.substring(0, anchoNombre).padEnd(anchoNombre, ' ')} ` +
+        `${numero} ${String(cantidad).padStart(4, ' ')} ${texto} ` +
           `${rightPadMoney(formatMoney(precio), 8)} ${rightPadMoney(total, 8)}`,
       );
     } else {
       const derecha = `$${formatMoney(neto)}`;
       const izquierda = `${numero} ${cantidad}x `;
-      const maxNombre = Math.max(4, width - izquierda.length - derecha.length - 1);
-      lines.push(leftRight(`${izquierda}${nombre.substring(0, maxNombre)}`, derecha, width));
+      if (letra) {
+        const hueco = width - derecha.length - 3;
+        const maxNombre = Math.max(4, hueco - izquierda.length);
+        lines.push(`${`${izquierda}${nombre.substring(0, maxNombre)}`.padEnd(hueco, ' ')} ${letra} ${derecha}`);
+      } else {
+        const maxNombre = Math.max(4, width - izquierda.length - derecha.length - 1);
+        lines.push(leftRight(`${izquierda}${nombre.substring(0, maxNombre)}`, derecha, width));
+      }
     }
 
     const identificacion = [
@@ -445,7 +458,8 @@ function renderTotals(lines: string[], factura: FacturaCerradaPayload, width: nu
   // Debe decir lo mismo que se le declaró a la DIAN, o la tirilla contradice al
   // documento que representa.
   const imp = factura.fe?.impuesto;
-  const conImpuesto = Boolean(imp && imp.monto > 0);
+  const desglose = desgloseImpuestos(factura);
+  const conImpuesto = Boolean(desglose || (imp && imp.monto > 0));
 
   // Sin nada entre el subtotal y el total, las dos líneas dirían el mismo
   // número: con el total basta.
@@ -462,7 +476,9 @@ function renderTotals(lines: string[], factura: FacturaCerradaPayload, width: nu
     lines.push(leftRight('NETO:', `$${formatMoney(factura.subtotal)}`, width));
   }
   if (iva > 0) lines.push(leftRight('IVA:', `$${formatMoney(iva)}`, width));
-  if (imp && imp.monto > 0) {
+  if (desglose) {
+    renderDesgloseImpuestos(lines, desglose, width);
+  } else if (imp && imp.monto > 0) {
     lines.push(leftRight('BASE GRAVABLE:', `$${formatMoney(imp.base)}`, width));
     lines.push(leftRight(`${imp.label} ${imp.tarifa}%:`, `$${formatMoney(imp.monto)}`, width));
   }
@@ -480,6 +496,53 @@ function renderTotals(lines: string[], factura: FacturaCerradaPayload, width: nu
   } else {
     lines.push(negrilla(totalPedido));
   }
+}
+
+/**
+ * El desglose por tarifa solo existe cuando el documento tiene DOS o más
+ * tratamientos de impuesto. Con uno solo manda el bloque de siempre
+ * (`fe.impuesto`): la tirilla de un restaurante no cambia.
+ */
+function desgloseImpuestos(factura: FacturaCerradaPayload): ImpuestoTarifaTicket[] | null {
+  const filas = factura.fe?.impuestos;
+  return Array.isArray(filas) && filas.length > 1 ? filas : null;
+}
+
+/** Valor con centavos fijos: el documento los declara y la tabla alinea por ellos. */
+function conCentavos(valor: number): string {
+  return (Number(valor) || 0).toLocaleString('es-CO', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+/** Celda de la tabla, alineada a la derecha; sin centavos solo si no cabe. */
+function valorEnColumna(valor: number, ancho: number): string {
+  const texto = conCentavos(valor);
+  return rightPadMoney(texto.length < ancho ? texto : formatMoney(Math.round(Number(valor) || 0)), ancho);
+}
+
+/**
+ * Tabla de impuestos: una fila por tarifa con su base y su valor. El exento
+ * informa impuesto en cero; el excluido no declara impuesto y deja la celda
+ * vacía. Sin rayas ni líneas en blanco: va entre el subtotal y el total.
+ */
+function renderDesgloseImpuestos(lines: string[], filas: ImpuestoTarifaTicket[], width: number): void {
+  const [anchoBase, anchoValor] = width >= 42 ? [14, 16] : [10, 11];
+  const anchoNombre = Math.max(8, width - anchoBase - anchoValor);
+  lines.push(`${'IMPUESTOS'.padEnd(anchoNombre, ' ')}${'BASE'.padStart(anchoBase, ' ')}${'VALOR'.padStart(anchoValor, ' ')}`);
+  let total = 0;
+  for (const fila of filas) {
+    const nombre = `${sanitizeText(fila.letra).substring(0, 1)} ${sanitizeText(fila.nombre)}`;
+    const excluido = fila.monto === undefined || fila.monto === null;
+    total += excluido ? 0 : Number(fila.monto) || 0;
+    lines.push(
+      (nombre.substring(0, anchoNombre).padEnd(anchoNombre, ' ') +
+        valorEnColumna(fila.base, anchoBase) +
+        (excluido ? '' : valorEnColumna(Number(fila.monto) || 0, anchoValor))).trimEnd(),
+    );
+  }
+  lines.push(leftRight('TOTAL IMPUESTOS:', `$${conCentavos(total)}`, width));
 }
 
 function renderPayments(lines: string[], factura: FacturaCerradaPayload, width: number): void {
