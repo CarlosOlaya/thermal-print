@@ -10,6 +10,7 @@ import {
   renderPrecuenta,
   renderReciboAbono,
   renderReservasDia,
+  renderRetirosCaja,
   renderStickerEntrega,
   renderStickerPrueba,
   renderTomaInventario,
@@ -1030,6 +1031,49 @@ for (const tipo of [undefined, 'cierre']) {
   assert.doesNotMatch(normal, /RELEVO DE TURNO|ACTA DE ENTREGA|Firma entrega|^Relevo:/m, `el cierre normal (${tipo}) no lleva acta`);
 }
 assert.doesNotMatch(cierre, /ACTA DE ENTREGA|RELEVO DE TURNO/);
+
+const retirosCaja = {
+  total_efectivo: 25_000,
+  items: [
+    { concepto: 'Retiro por\n administración', monto: 20_000 },
+    { concepto: 'Caja fuerte', monto: 5_000 },
+  ],
+  reversados: [{ concepto: 'Duplicado revertido', monto: 20_000, estado: 'reversado' }],
+};
+for (const columns of [32, 48]) {
+  const options = { now, columns };
+  const retiroManual = {
+    retiros_caja: retirosCaja, efectivo_esperado: 100_000, efectivo_contado: 100_000,
+  };
+  const normal = { ...relevoCierre, tipo_cierre: 'cierre' };
+  const ticket = sinMarcas(renderCierreCaja({ ...normal, ...retiroManual }, options));
+  const section = ticket.split('RESUMEN EFECTIVO')[1].split('Contado:')[0];
+  assert.match(section, /^- Retiros de caja: +-\$25\.000$/m);
+  assert.match(section, /^  Retiro por(?: administracion)? +\$20\.000$/m);
+  assert.match(section, /administracion/);
+  assert.match(section, /^  Caja fuerte +\$5\.000$/m);
+  assert.match(section, /^Esperado: +\$100\.000$/m);
+  assert.doesNotMatch(ticket, /Duplicado revertido/);
+  assert.ok(ticket.split('\n').every(line => line.length <= columns));
+  assert.equal(
+    renderCierreCaja({ ...normal, retiros_caja: { total_efectivo: 0, items: [], reversados: retirosCaja.reversados } }, options),
+    renderCierreCaja(normal, options),
+  );
+  const [resumen, acta] = sinMarcas(renderCierreCaja({ ...relevoCierre, ...retiroManual }, options)).split('ACTA DE ENTREGA DE CAJA');
+  assert.match(resumen, /Retiros de caja: +-\$25\.000/);
+  assert.doesNotMatch(resumen, /Consignacion banco|\$75\.000/);
+  assert.match(acta, /- Retiro: +-\$75\.000/);
+  assert.doesNotMatch(acta, /Retiros de caja|Caja fuerte/);
+
+  const monto = 9_999_999_999_999.99;
+  const lines = renderRetirosCaja({
+    total_efectivo: monto,
+    items: [{ concepto: 'A'.repeat(100), monto }],
+  }, columns);
+  assert.ok(lines.every(line => line.length <= columns));
+  assert.ok(lines.some(line => line.endsWith('$9.999.999.999.999,99')));
+  assert.equal(lines.join('').match(/A/g)?.length, 100);
+}
 
 // ── Cartera (4.14.0): el pedido fiado y el recibo de abono ──
 const fiado = {

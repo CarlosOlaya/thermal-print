@@ -48,6 +48,7 @@ __export(index_exports, {
   renderReciboAbono: () => renderReciboAbono,
   renderReporteVentas: () => renderReporteVentas,
   renderReservasDia: () => renderReservasDia,
+  renderRetirosCaja: () => renderRetirosCaja,
   renderStickerEntrega: () => renderStickerEntrega,
   renderStickerPrueba: () => renderStickerPrueba,
   renderTomaInventario: () => renderTomaInventario,
@@ -1937,6 +1938,28 @@ function renderCashIncomeSummary(lines, ingresosCaja, ctx) {
   lines.push(escBold(true) + leftRight("TOTAL INGRESOS:", money(ingresosCaja.total_efectivo), ctx.width) + escBold(false));
   lines.push("");
 }
+function renderRetirosCaja(retiros, columns) {
+  if (!isRecord2(retiros) || num(retiros.total_efectivo) <= 0) return [];
+  const width = clampColumns(columns);
+  const label = "- Retiros de caja:";
+  const total = `-${money(retiros.total_efectivo)}`;
+  const lines = label.length + total.length < width ? [leftRight(label, total, width)] : [label, rightPadMoney(total, width)];
+  for (const retiro of arr(retiros.items)) {
+    if (retiro.estado === "reversado" || num(retiro.monto) <= 0) continue;
+    const amount = money(retiro.monto);
+    const concepto = text(retiro.concepto).replace(/\s+/g, " ").trim() || "Retiro";
+    const espacioConcepto = width - amount.length - 3;
+    if (espacioConcepto < 4) {
+      for (const line of wrapWords2(concepto, width - 2)) lines.push(`  ${line}`);
+      lines.push(rightPadMoney(amount, width));
+      continue;
+    }
+    const [first, ...rest] = wrapWords2(concepto, espacioConcepto);
+    lines.push(leftRight(`  ${first}`, amount, width));
+    for (const line of rest) lines.push(`    ${line}`);
+  }
+  return lines;
+}
 function renderCarteraSummary(lines, cartera, ctx) {
   if (!cartera || num(cartera.total) <= 0) return;
   lines.push(escBold(true) + "RECAUDO DE CARTERA" + escBold(false));
@@ -1966,6 +1989,7 @@ function renderCashSummary(lines, data, metodos, gastos, ingresosCaja, domicilio
   if (num(gastosEf?.total) > 0) lines.push(leftRight("- Egresos:", `-${money(gastosEf?.total)}`, ctx.width));
   if (num(domicilios?.recaudado_efectivo) > 0) lines.push(leftRight("+ Domicilio:", money(domicilios?.recaudado_efectivo), ctx.width));
   if (num(domicilios?.liquidado_efectivo) > 0) lines.push(leftRight("- Liq. domicilio:", `-${money(domicilios?.liquidado_efectivo)}`, ctx.width));
+  lines.push(...renderRetirosCaja(data.retiros_caja, ctx.width));
   lines.push(ctx.sep);
   lines.push(escBold(true) + leftRight("Esperado:", money(data.efectivo_esperado), ctx.width) + escBold(false));
   lines.push(leftRight("Contado:", money(data.efectivo_contado), ctx.width));
@@ -2143,6 +2167,7 @@ function isRecord2(value) {
   renderReciboAbono,
   renderReporteVentas,
   renderReservasDia,
+  renderRetirosCaja,
   renderStickerEntrega,
   renderStickerPrueba,
   renderTomaInventario,

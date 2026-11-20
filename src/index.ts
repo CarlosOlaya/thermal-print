@@ -53,6 +53,7 @@ export {
   renderReciboAbono,
   renderReporteVentas,
   renderReservasDia,
+  renderRetirosCaja,
   renderTomaInventario,
   renderVentasPLU,
 } from './renderers/documents';

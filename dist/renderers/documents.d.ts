@@ -22,3 +22,5 @@ export declare function renderTomaInventario(data: ThermalTomaInventarioPayload,
  * Cuando la reserva no tiene mesa, se imprime una raya para anotarla a mano.
  */
 export declare function renderReservasDia(data: ThermalReservasDiaPayload, options?: ThermalRenderOptions): string;
+/** Desglose de retiros vigentes para el resumen de efectivo del cierre. */
+export declare function renderRetirosCaja(retiros: unknown, columns: number): string[];
