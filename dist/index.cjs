@@ -22,6 +22,8 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
 var index_exports = {};
 __export(index_exports, {
   ESC: () => ESC,
+  MAX_LOGO_HEIGHT: () => MAX_LOGO_HEIGHT,
+  MAX_LOGO_WIDTH_BYTES: () => MAX_LOGO_WIDTH_BYTES,
   center: () => center,
   escBeep: () => escBeep,
   escBold: () => escBold,
@@ -152,6 +154,37 @@ function capitalize(value) {
 // src/escpos.ts
 var ESC = "\x1B";
 var GS = "";
+var MAX_LOGO_WIDTH_BYTES = 18;
+var MAX_LOGO_HEIGHT = 80;
+function rasterLogoBytes(logo) {
+  if (!logo) return [];
+  const { widthBytes, height, data } = logo;
+  if (!Number.isInteger(widthBytes) || widthBytes < 1 || widthBytes > MAX_LOGO_WIDTH_BYTES || !Number.isInteger(height) || height < 1 || height > MAX_LOGO_HEIGHT || typeof data !== "string" || data.length !== Math.ceil(widthBytes * height / 3) * 4) return [];
+  let image;
+  try {
+    image = atob(data);
+  } catch {
+    return [];
+  }
+  if (image.length !== widthBytes * height) return [];
+  return [
+    27,
+    97,
+    1,
+    29,
+    118,
+    48,
+    0,
+    widthBytes,
+    0,
+    height,
+    0,
+    ...Array.from(image, (byte) => byte.charCodeAt(0)),
+    27,
+    97,
+    0
+  ];
+}
 function escBold(active) {
   return ESC + (active ? "E" : "E\0");
 }
@@ -275,8 +308,9 @@ function textSegmentToBytes(segment) {
 }
 function textToEscPosBytes(text2, options = {}) {
   const bytes = [27, 64];
+  if (options.openCashDrawer) bytes.push(...textSegmentToBytes(escCashDrawerPulse()));
+  bytes.push(...rasterLogoBytes(options.logo));
   const document = [
-    options.openCashDrawer ? escCashDrawerPulse() : "",
     text2 || "",
     options.cut ? escCut() : "",
     options.beepAfterPrint ? escBeep() : ""
@@ -2141,6 +2175,8 @@ function isRecord2(value) {
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   ESC,
+  MAX_LOGO_HEIGHT,
+  MAX_LOGO_WIDTH_BYTES,
   center,
   escBeep,
   escBold,

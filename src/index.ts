@@ -20,6 +20,8 @@ export type {
 
 export {
   ESC,
+  MAX_LOGO_HEIGHT,
+  MAX_LOGO_WIDTH_BYTES,
   escBeep,
   escBold,
   escCashDrawerPulse,
@@ -29,6 +31,7 @@ export {
   qrMarker,
   textToEscPosBytes,
   type EscPosByteOptions,
+  type RasterLogo,
 } from './escpos';
 export { center, formatDate, formatMoney, formatTime, labelMetodo, leftRight, sanitizeText } from './utils';
 export { renderComanda, renderComandaAnulacion } from './renderers/comanda';

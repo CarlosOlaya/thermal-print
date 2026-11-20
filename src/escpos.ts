@@ -7,6 +7,38 @@ export interface EscPosByteOptions {
   cut?: boolean;
   openCashDrawer?: boolean;
   beepAfterPrint?: boolean;
+  logo?: RasterLogo;
+}
+
+export interface RasterLogo {
+  widthBytes: number;
+  height: number;
+  data: string;
+}
+
+export const MAX_LOGO_WIDTH_BYTES = 18;
+export const MAX_LOGO_HEIGHT = 80;
+
+/** Raster de 1 bit (GS v 0), centrado y seguido por la alineación habitual del texto. */
+function rasterLogoBytes(logo?: RasterLogo): number[] {
+  if (!logo) return [];
+  const { widthBytes, height, data } = logo;
+  if (!Number.isInteger(widthBytes) || widthBytes < 1 || widthBytes > MAX_LOGO_WIDTH_BYTES ||
+      !Number.isInteger(height) || height < 1 || height > MAX_LOGO_HEIGHT ||
+      typeof data !== 'string' || data.length !== Math.ceil(widthBytes * height / 3) * 4) return [];
+  let image: string;
+  try {
+    image = atob(data);
+  } catch {
+    return [];
+  }
+  if (image.length !== widthBytes * height) return [];
+  return [
+    0x1b, 0x61, 0x01,
+    0x1d, 0x76, 0x30, 0x00, widthBytes, 0x00, height, 0x00,
+    ...Array.from(image, byte => byte.charCodeAt(0)),
+    0x1b, 0x61, 0x00,
+  ];
 }
 
 export function escBold(active: boolean): string {
@@ -106,8 +138,9 @@ function textSegmentToBytes(segment: string): number[] {
 
 export function textToEscPosBytes(text: string, options: EscPosByteOptions = {}): Uint8Array {
   const bytes: number[] = [0x1b, 0x40];
+  if (options.openCashDrawer) bytes.push(...textSegmentToBytes(escCashDrawerPulse()));
+  bytes.push(...rasterLogoBytes(options.logo));
   const document = [
-    options.openCashDrawer ? escCashDrawerPulse() : '',
     text || '',
     options.cut ? escCut() : '',
     options.beepAfterPrint ? escBeep() : '',

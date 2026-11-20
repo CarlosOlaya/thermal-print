@@ -1,5 +1,5 @@
 export type { BonoQrItem, BonoQrTicket, CreditoTicket, FacturaCerradaPayload, FacturaElectronicaTicket, ImpuestoTarifaTicket, ItemEvento, PagoEventoItem, ThermalComandaItem, ThermalComandaPayload, ThermalDocumentPayload, ThermalInventarioItem, ThermalReciboAbonoPayload, ThermalRenderOptions, ThermalReservaItem, ThermalReservasDiaPayload, ThermalTomaInventarioPayload, } from './types';
-export { ESC, escBeep, escBold, escCashDrawerPulse, escCut, escFontSize, escLeftMargin, qrMarker, textToEscPosBytes, type EscPosByteOptions, } from './escpos';
+export { ESC, MAX_LOGO_HEIGHT, MAX_LOGO_WIDTH_BYTES, escBeep, escBold, escCashDrawerPulse, escCut, escFontSize, escLeftMargin, qrMarker, textToEscPosBytes, type EscPosByteOptions, type RasterLogo, } from './escpos';
 export { center, formatDate, formatMoney, formatTime, labelMetodo, leftRight, sanitizeText } from './utils';
 export { renderComanda, renderComandaAnulacion } from './renderers/comanda';
 export { renderStickerEntrega, renderStickerPrueba, stickerBitmapDesdeRgba, tsplBeep, type StickerBitmap, type StickerIcono, type StickerOptions, } from './renderers/sticker';

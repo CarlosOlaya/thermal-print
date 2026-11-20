@@ -28,6 +28,17 @@ import {
 
 const now = new Date('2026-05-27T15:30:00Z');
 
+// El logo binario va antes del nombre y restablece la alineación antes del texto.
+const logo = { widthBytes: 1, height: 2, data: Buffer.from([0x80, 0x1b]).toString('base64') };
+const textoConNombre = 'MI RESTAURANTE\n';
+const sinLogo = textToEscPosBytes(textoConNombre, { cut: true });
+const conLogo = textToEscPosBytes(textoConNombre, { cut: true, logo });
+assert.deepEqual(Array.from(conLogo.slice(0, 18)), [
+  0x1b, 0x40, 0x1b, 0x61, 1, 0x1d, 0x76, 0x30, 0, 1, 0, 2, 0, 0x80, 0x1b, 0x1b, 0x61, 0,
+]);
+assert.deepEqual(conLogo.slice(18), sinLogo.slice(2));
+assert.deepEqual(textToEscPosBytes(textoConNombre, { cut: true, logo: { ...logo, height: 3 } }), sinLogo);
+
 const comanda = renderComanda({
   comanda: 12,
   mesa_nombre: 'Terraza 1',

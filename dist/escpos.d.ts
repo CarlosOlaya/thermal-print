@@ -3,7 +3,15 @@ export interface EscPosByteOptions {
     cut?: boolean;
     openCashDrawer?: boolean;
     beepAfterPrint?: boolean;
+    logo?: RasterLogo;
 }
+export interface RasterLogo {
+    widthBytes: number;
+    height: number;
+    data: string;
+}
+export declare const MAX_LOGO_WIDTH_BYTES = 18;
+export declare const MAX_LOGO_HEIGHT = 80;
 export declare function escBold(active: boolean): string;
 export declare function escFontSize(size: 1 | 2 | 3 | 4): string;
 export declare function escCut(): string;
