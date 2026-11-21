@@ -121,6 +121,8 @@ for (const columns of [32, 48]) {
       { ...comandaLarga, tipo_comanda: 'anulacion', motivo: 'Cambio solicitado por el cliente' },
     ]) {
       const text = renderComanda(pedido, { columns, now, comandaFontSize });
+      assert.equal(text.match(/^\n*/)[0], '\n');
+      assert.ok(text.endsWith('\n\n\n\n'));
       const bytes = Buffer.from(textToEscPosBytes(text, { cut: true })).toString('latin1');
       if (escSize === 1) {
         assert.ok(!bytes.includes('\x1d\x21'));

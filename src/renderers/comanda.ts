@@ -34,7 +34,7 @@ function render(payload: ThermalComandaPayload, options: ThermalRenderOptions, a
   const sep2 = '='.repeat(width);
   const sepX = 'X'.repeat(width);
   const bold = (text: string) => escBold(true) + text + escBold(false);
-  const lines: string[] = ['', '', ''];
+  const lines: string[] = [''];
 
   function add(text: string, style: { bold?: boolean; center?: boolean } = {}): void {
     for (const part of wrap(text, width)) {
@@ -119,7 +119,7 @@ function render(payload: ThermalComandaPayload, options: ThermalRenderOptions, a
   }
   lines.push(anulacion ? sepX : sep2);
   if (size !== 1) {
-    lines[3] = escFontSize(size) + lines[3];
+    lines[1] = escFontSize(size) + lines[1];
     lines[lines.length - 1] += escFontSize(1);
   }
   return lines.concat('', '', '', '').join('\n');
