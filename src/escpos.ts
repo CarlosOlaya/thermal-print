@@ -8,6 +8,7 @@ export interface EscPosByteOptions {
   openCashDrawer?: boolean;
   beepAfterPrint?: boolean;
   logo?: RasterLogo;
+  leftMarginDots?: number;
 }
 
 export interface RasterLogo {
@@ -19,7 +20,7 @@ export interface RasterLogo {
 export const MAX_LOGO_WIDTH_BYTES = 18;
 export const MAX_LOGO_HEIGHT = 80;
 
-/** Raster de 1 bit (GS v 0), centrado y seguido por la alineación habitual del texto. */
+/** Duplica cada punto del logo guardado (hasta 288 × 160), incluso en las tirillas de 58 mm. */
 function rasterLogoBytes(logo?: RasterLogo): number[] {
   if (!logo) return [];
   const { widthBytes, height, data } = logo;
@@ -33,11 +34,25 @@ function rasterLogoBytes(logo?: RasterLogo): number[] {
     return [];
   }
   if (image.length !== widthBytes * height) return [];
+  const raster: number[] = [];
+  for (let y = 0; y < height; y++) {
+    const row: number[] = [];
+    for (let x = 0; x < widthBytes; x++) {
+      const byte = image.charCodeAt(y * widthBytes + x);
+      let wide = 0;
+      for (let mask = 0x80; mask > 0; mask >>= 1) {
+        wide = (wide << 2) | (byte & mask ? 0b11 : 0);
+      }
+      row.push(wide >> 8, wide & 0xff);
+    }
+    raster.push(...row, ...row);
+  }
   return [
     0x1b, 0x61, 0x01,
-    0x1d, 0x76, 0x30, 0x00, widthBytes, 0x00, height, 0x00,
-    ...Array.from(image, byte => byte.charCodeAt(0)),
+    0x1d, 0x76, 0x30, 0x00, widthBytes * 2, 0x00, height * 2, 0x00,
+    ...raster,
     0x1b, 0x61, 0x00,
+    0x1b, 0x4a, 16, // Separa el logo del nombre con unos 2 mm de avance (203 dpi).
   ];
 }
 
@@ -139,9 +154,11 @@ function textSegmentToBytes(segment: string): number[] {
 export function textToEscPosBytes(text: string, options: EscPosByteOptions = {}): Uint8Array {
   const bytes: number[] = [0x1b, 0x40];
   if (options.openCashDrawer) bytes.push(...textSegmentToBytes(escCashDrawerPulse()));
-  bytes.push(...rasterLogoBytes(options.logo));
+  if (options.leftMarginDots !== undefined) bytes.push(...textSegmentToBytes(escLeftMargin(options.leftMarginDots)));
+  const logo = rasterLogoBytes(options.logo);
+  bytes.push(...logo);
   const document = [
-    text || '',
+    logo.length ? (text || '').replace(/^(?:[ \t]*\r?\n)+/, '') : text || '',
     options.cut ? escCut() : '',
     options.beepAfterPrint ? escBeep() : '',
   ].join('');

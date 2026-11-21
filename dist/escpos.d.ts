@@ -4,6 +4,7 @@ export interface EscPosByteOptions {
     openCashDrawer?: boolean;
     beepAfterPrint?: boolean;
     logo?: RasterLogo;
+    leftMarginDots?: number;
 }
 export interface RasterLogo {
     widthBytes: number;

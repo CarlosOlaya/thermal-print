@@ -110,6 +110,19 @@ function rasterLogoBytes(logo) {
     return [];
   }
   if (image.length !== widthBytes * height) return [];
+  const raster = [];
+  for (let y = 0; y < height; y++) {
+    const row = [];
+    for (let x = 0; x < widthBytes; x++) {
+      const byte = image.charCodeAt(y * widthBytes + x);
+      let wide = 0;
+      for (let mask = 128; mask > 0; mask >>= 1) {
+        wide = wide << 2 | (byte & mask ? 3 : 0);
+      }
+      row.push(wide >> 8, wide & 255);
+    }
+    raster.push(...row, ...row);
+  }
   return [
     27,
     97,
@@ -118,14 +131,18 @@ function rasterLogoBytes(logo) {
     118,
     48,
     0,
-    widthBytes,
+    widthBytes * 2,
     0,
-    height,
+    height * 2,
     0,
-    ...Array.from(image, (byte) => byte.charCodeAt(0)),
+    ...raster,
     27,
     97,
-    0
+    0,
+    27,
+    74,
+    16
+    // Separa el logo del nombre con unos 2 mm de avance (203 dpi).
   ];
 }
 function escBold(active) {
@@ -252,9 +269,11 @@ function textSegmentToBytes(segment) {
 function textToEscPosBytes(text2, options = {}) {
   const bytes = [27, 64];
   if (options.openCashDrawer) bytes.push(...textSegmentToBytes(escCashDrawerPulse()));
-  bytes.push(...rasterLogoBytes(options.logo));
+  if (options.leftMarginDots !== void 0) bytes.push(...textSegmentToBytes(escLeftMargin(options.leftMarginDots)));
+  const logo = rasterLogoBytes(options.logo);
+  bytes.push(...logo);
   const document = [
-    text2 || "",
+    logo.length ? (text2 || "").replace(/^(?:[ \t]*\r?\n)+/, "") : text2 || "",
     options.cut ? escCut() : "",
     options.beepAfterPrint ? escBeep() : ""
   ].join("");

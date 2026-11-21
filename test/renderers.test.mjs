@@ -29,16 +29,36 @@ import {
 
 const now = new Date('2026-05-27T15:30:00Z');
 
-// El logo binario va antes del nombre y restablece la alineación antes del texto.
+// El logo guardado se imprime al doble desde el inicio y deja un avance corto al nombre.
 const logo = { widthBytes: 1, height: 2, data: Buffer.from([0x80, 0x1b]).toString('base64') };
-const textoConNombre = 'MI RESTAURANTE\n';
+const textoConNombre = '\n \r\nMI RESTAURANTE\n';
 const sinLogo = textToEscPosBytes(textoConNombre, { cut: true });
 const conLogo = textToEscPosBytes(textoConNombre, { cut: true, logo });
-assert.deepEqual(Array.from(conLogo.slice(0, 18)), [
-  0x1b, 0x40, 0x1b, 0x61, 1, 0x1d, 0x76, 0x30, 0, 1, 0, 2, 0, 0x80, 0x1b, 0x1b, 0x61, 0,
+assert.deepEqual(Array.from(conLogo.slice(0, 27)), [
+  0x1b, 0x40, 0x1b, 0x61, 1, 0x1d, 0x76, 0x30, 0,
+  2, 0, 4, 0, 0xc0, 0, 0xc0, 0, 3, 0xcf, 3, 0xcf,
+  0x1b, 0x61, 0, 0x1b, 0x4a, 16,
 ]);
-assert.deepEqual(conLogo.slice(18), sinLogo.slice(2));
+assert.deepEqual(conLogo.slice(27), textToEscPosBytes(textoConNombre.trimStart(), { cut: true }).slice(2));
 assert.deepEqual(textToEscPosBytes(textoConNombre, { cut: true, logo: { ...logo, height: 3 } }), sinLogo);
+
+const logoCompleto = { widthBytes: 18, height: 80, data: Buffer.alloc(18 * 80, 0xff).toString('base64') };
+for (const columns of [32, 48]) {
+  const receipts = [
+    renderFactura({ nombre_negocio: 'BRASA', tenant_nombre: 'BRASA', items: [], total: 1000 }, { columns, now }),
+    renderPrecuenta({ tenant_nombre: 'BRASA' }, { columns, now }),
+    renderCierreCaja({ tenant_nombre: 'BRASA' }, { columns, now }),
+  ];
+  for (const receipt of receipts) {
+    const bytes = textToEscPosBytes(receipt, { logo: logoCompleto, leftMarginDots: 0 });
+    assert.deepEqual(Array.from(bytes.slice(6, 17)), [
+      0x1b, 0x61, 1, 0x1d, 0x76, 0x30, 0, 36, 0, 160, 0,
+    ]);
+    const inicio = 17 + 36 * 160;
+    assert.deepEqual(Array.from(bytes.slice(inicio, inicio + 6)), [0x1b, 0x61, 0, 0x1b, 0x4a, 16]);
+    assert.deepEqual(bytes.slice(inicio + 6), textToEscPosBytes(receipt.replace(/^\n+/, '')).slice(2));
+  }
+}
 
 const comanda = renderComanda({
   comanda: 12,
