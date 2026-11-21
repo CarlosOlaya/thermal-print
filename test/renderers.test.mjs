@@ -21,6 +21,7 @@ import {
   escBold,
   escCashDrawerPulse,
   escCut,
+  escFontSize,
   qrMarker,
   sanitizeText,
   textToEscPosBytes,
@@ -97,6 +98,56 @@ const comandaFlat = renderComanda({
 }, { now, columns: 48 });
 assert.match(comandaFlat, /COMANDA #15 \| COCINA/);
 assert.match(comandaFlat, /CANT  PRODUCTO/);
+
+const comandaLarga = {
+  comanda: 128,
+  area: 'Cocina terraza principal',
+  mesa_nombre: 'Terraza mesa junto a la ventana',
+  mesero: 'Camila Rodriguez',
+  cliente_nombre: 'Laura Patricia Gomez',
+  localizador: 'PATIO NORTE',
+  hora: '12:45 pm',
+  items: [{
+    cantidad: 2,
+    nombre: 'Hamburguesa doble de la casa con pan artesanal',
+    comentario: 'Sin cebolla. Salsa aparte. ' + 'abcdefghijklmnopqrstuvxyz'.repeat(2),
+  }],
+};
+for (const columns of [32, 48]) {
+  for (const [comandaFontSize, escSize] of [['normal', 1], ['grande', 2], ['extra_grande', 4]]) {
+    for (const pedido of [
+      comandaLarga,
+      { ...comandaLarga, secciones: [{ area: comandaLarga.area, items: comandaLarga.items }] },
+      { ...comandaLarga, tipo_comanda: 'anulacion', motivo: 'Cambio solicitado por el cliente' },
+    ]) {
+      const text = renderComanda(pedido, { columns, now, comandaFontSize });
+      const bytes = Buffer.from(textToEscPosBytes(text, { cut: true })).toString('latin1');
+      if (escSize === 1) {
+        assert.ok(!bytes.includes('\x1d\x21'));
+      } else {
+        const sizeCommand = escFontSize(escSize);
+        assert.equal(bytes.indexOf(sizeCommand), bytes.indexOf('\x1d\x21'));
+        assert.ok(bytes.indexOf(sizeCommand) < bytes.indexOf('COMANDA #128'));
+        assert.ok(bytes.indexOf(escFontSize(1)) > bytes.indexOf('Salsa'));
+        assert.ok(bytes.indexOf(escCut()) > bytes.indexOf(escFontSize(1)));
+        assert.equal(bytes.split('\x1d\x21').length, 3);
+      }
+      const plain = text.replaceAll(escBold(true), '').replaceAll(escBold(false), '')
+        .replaceAll(escFontSize(escSize), '').replaceAll(escFontSize(1), '');
+      for (const line of plain.split('\n')) {
+        assert.ok(line.length <= columns / (escSize === 4 ? 2 : 1), JSON.stringify(line));
+      }
+      const joined = plain.replace(/\s/g, '');
+      for (const field of [
+        comandaLarga.area.toUpperCase(), comandaLarga.mesa_nombre.toUpperCase(),
+        'Mesero: ' + comandaLarga.mesero, 'Cliente: ' + comandaLarga.cliente_nombre,
+        comandaLarga.localizador, comandaLarga.hora, comandaLarga.items[0].nombre.toUpperCase(),
+        comandaLarga.items[0].comentario,
+      ]) assert.ok(joined.includes(field.replace(/\s/g, '')), field);
+      if (pedido.tipo_comanda === 'anulacion') assert.ok(joined.includes('NOPREPARAR'));
+    }
+  }
+}
 
 const factura = renderFactura({
   tenant_nombre: 'Crokanza',

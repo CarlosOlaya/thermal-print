@@ -1,6 +1,7 @@
 export type {
   BonoQrItem,
   BonoQrTicket,
+  ComandaFontSize,
   CreditoTicket,
   FacturaCerradaPayload,
   FacturaElectronicaTicket,
@@ -17,6 +18,7 @@ export type {
   ThermalReservasDiaPayload,
   ThermalTomaInventarioPayload,
 } from './types';
+export { COMANDA_FONT_SIZES } from './types';
 
 export {
   ESC,

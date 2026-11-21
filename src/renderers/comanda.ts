@@ -1,109 +1,126 @@
-import { escBold } from '../escpos';
+import { escBold, escFontSize } from '../escpos';
 import type { ThermalComandaItem, ThermalComandaPayload, ThermalRenderOptions } from '../types';
 import { center, clampColumns, formatDate, formatTime, sanitizeText } from '../utils';
 
-export function renderComanda(payload: ThermalComandaPayload, options: ThermalRenderOptions = {}): string {
-  if (payload.tipo_comanda === 'anulacion') return renderComandaAnulacion(payload, options);
-
-  const width = clampColumns(options.columns);
-  const now = options.now || new Date();
-  const timezone = options.timezone || 'America/Bogota';
-  const sep = '-'.repeat(width);
-  const sep2 = '='.repeat(width);
-  const bold = escBold(true);
-  const boldOff = escBold(false);
-  const hora = payload.hora ? sanitizeText(payload.hora) : formatTime(now, timezone);
-  const lines: string[] = ['', '', ''];
-
-  // Comanda unificada: varios áreas en un solo ticket (secciones). Si no llega,
-  // se usa el modo por área (un único `items` + área en el título).
-  const secciones = Array.isArray(payload.secciones) && payload.secciones.length > 0
-    ? payload.secciones
-    : null;
-
-  const titulo = secciones
-    ? `COMANDA #${payload.comanda || ''}`
-    : `COMANDA #${payload.comanda || ''} | ${sanitizeText(payload.area || '').toUpperCase()}`;
-  lines.push(center(titulo, width));
-  lines.push(sep2);
-
-  const mesaLabel = sanitizeText(String(payload.mesa_nombre || `Mesa: ${payload.mesa || ''}`).toUpperCase());
-  lines.push(`${bold}${mesaLabel}${boldOff}   Mesero: ${sanitizeText(payload.mesero || '')}`);
-  if (payload.cliente_nombre) lines.push(`${bold}Cliente: ${sanitizeText(payload.cliente_nombre)}${boldOff}`);
-  if (payload.localizador) lines.push(`${bold}Localizador: ${sanitizeText(payload.localizador)}${boldOff}`);
-  if (payload.comensales) lines.push(`Personas: ${sanitizeText(payload.comensales)}`);
-  lines.push(`Fecha: ${formatDate(now, timezone)}   Hora: ${hora}`);
-
-  const pushItems = (items: ThermalComandaItem[] | undefined): void => {
-    for (const item of items || []) {
-      const name = sanitizeText((item.nombre || item.producto || '').toUpperCase()).substring(0, Math.max(10, width - 6));
-      const qty = sanitizeText(item.cantidad || 1).padStart(3, ' ');
-      lines.push(bold + `${qty}  ${name}` + boldOff);
-      if (item.comentario) lines.push(`      > ${sanitizeText(item.comentario)}`);
-      lines.push('');
+function wrap(text: string, width: number): string[] {
+  const lines: string[] = [];
+  for (const paragraph of text.split('\n')) {
+    let remaining = paragraph.trim();
+    while (remaining.length > width) {
+      const space = remaining.lastIndexOf(' ', width);
+      const end = space > 0 ? space : width;
+      lines.push(remaining.slice(0, end).trimEnd());
+      remaining = remaining.slice(end).trimStart();
     }
-  };
-
-  if (secciones) {
-    for (const seccion of secciones) {
-      lines.push(sep);
-      lines.push(bold + center(`* ${sanitizeText(seccion.area || '').toUpperCase()} *`, width) + boldOff);
-      lines.push(sep);
-      pushItems(seccion.items);
-    }
-  } else {
-    lines.push(sep);
-    lines.push('CANT  PRODUCTO');
-    lines.push(sep);
-    pushItems(payload.items);
+    lines.push(remaining);
   }
+  return lines;
+}
 
-  lines.push(sep2, '', '', '', '');
-  return lines.join('\n');
+export function renderComanda(payload: ThermalComandaPayload, options: ThermalRenderOptions = {}): string {
+  return render(payload, options, payload.tipo_comanda === 'anulacion');
 }
 
 export function renderComandaAnulacion(payload: ThermalComandaPayload, options: ThermalRenderOptions = {}): string {
-  const width = clampColumns(options.columns);
+  return render(payload, options, true);
+}
+
+function render(payload: ThermalComandaPayload, options: ThermalRenderOptions, anulacion: boolean): string {
+  const size = options.comandaFontSize === 'extra_grande' ? 4 : options.comandaFontSize === 'grande' ? 2 : 1;
+  const width = clampColumns(options.columns) / (size === 4 ? 2 : 1);
   const now = options.now || new Date();
   const timezone = options.timezone || 'America/Bogota';
   const sep = '-'.repeat(width);
   const sep2 = '='.repeat(width);
   const sepX = 'X'.repeat(width);
-  const bold = escBold(true);
-  const boldOff = escBold(false);
-  const hora = payload.hora ? sanitizeText(payload.hora) : formatTime(now, timezone);
+  const bold = (text: string) => escBold(true) + text + escBold(false);
   const lines: string[] = ['', '', ''];
 
-  lines.push(sep2);
-  lines.push(bold + center('*** ANULACION ***', width) + boldOff);
-  lines.push(center(`COMANDA #${payload.comanda || ''} | ${sanitizeText(payload.area || '').toUpperCase()}`, width));
+  function add(text: string, style: { bold?: boolean; center?: boolean } = {}): void {
+    for (const part of wrap(text, width)) {
+      const line = style.center ? center(part, width) : part;
+      lines.push(style.bold ? bold(line) : line);
+    }
+  }
+
+  function addPair(first: string, second: string, gap: string, style: { center?: boolean; bold?: boolean } = {}): void {
+    const combined = first + gap + second;
+    if (combined.length <= width && !combined.includes('\n')) {
+      lines.push(style.center ? center(combined, width) : (style.bold ? bold(first) : first) + gap + second);
+      return;
+    }
+    add(first, style);
+    add(second, { center: style.center });
+  }
+
+  // La comanda unificada lleva un encabezado por área y las anulaciones salen por separado.
+  const secciones = !anulacion && Array.isArray(payload.secciones) && payload.secciones.length ? payload.secciones : null;
+  const numero = 'COMANDA #' + sanitizeText(payload.comanda || '');
+  const area = sanitizeText(payload.area || '').toUpperCase();
+  if (anulacion) {
+    lines.push(sep2);
+    add(width < 17 ? '* ANULACION *' : '*** ANULACION ***', { bold: true, center: true });
+  }
+  if (secciones) add(numero, { center: true });
+  else addPair(numero, area, ' | ', { center: true });
   lines.push(sep2);
 
-  const mesaLabel = sanitizeText(String(payload.mesa_nombre || `Mesa: ${payload.mesa || ''}`).toUpperCase());
-  lines.push(`${bold}${mesaLabel}${boldOff}   Mesero: ${sanitizeText(payload.mesero || '')}`);
-  if (payload.cliente_nombre) lines.push(`${bold}Cliente: ${sanitizeText(payload.cliente_nombre)}${boldOff}`);
-  if (payload.localizador) lines.push(`${bold}Localizador: ${sanitizeText(payload.localizador)}${boldOff}`);
-  lines.push(`Fecha: ${formatDate(now, timezone)}   Hora: ${hora}`);
-  lines.push(sep);
+  const mesa = sanitizeText(payload.mesa_nombre || 'Mesa: ' + (payload.mesa || '')).toUpperCase();
+  addPair(mesa, 'Mesero: ' + sanitizeText(payload.mesero || ''), '   ', { bold: true });
+  if (payload.cliente_nombre) add('Cliente: ' + sanitizeText(payload.cliente_nombre), { bold: true });
+  if (payload.localizador) add('Localizador: ' + sanitizeText(payload.localizador), { bold: true });
+  if (!anulacion && payload.comensales) add('Personas: ' + sanitizeText(payload.comensales));
+  const hora = payload.hora ? sanitizeText(payload.hora) : formatTime(now, timezone);
+  addPair('Fecha: ' + formatDate(now, timezone), 'Hora: ' + hora, '   ');
 
-  if (payload.motivo) {
-    lines.push(bold + `MOTIVO: ${sanitizeText(String(payload.motivo).toUpperCase())}` + boldOff);
+  function addItems(items: ThermalComandaItem[] | undefined): void {
+    for (const item of items || []) {
+      const qty = sanitizeText(anulacion ? Math.abs(Number(item.cantidad) || 1) : item.cantidad || 1).padStart(3, ' ');
+      let prefix = qty + '  ';
+      if (prefix.length >= width) {
+        add(qty, { bold: true });
+        prefix = '     ';
+      }
+      const name = sanitizeText(item.nombre || item.producto || '').toUpperCase();
+      const continuation = ' '.repeat(prefix.length);
+      wrap(name, width - prefix.length).forEach((line, index) => {
+        lines.push(bold((index === 0 ? prefix : continuation) + line));
+      });
+      if (item.comentario) {
+        const indent = '      ';
+        for (const line of wrap('> ' + sanitizeText(item.comentario), width - indent.length)) lines.push(indent + line);
+      }
+      lines.push('');
+    }
+  }
+
+  if (secciones) {
+    for (const seccion of secciones) {
+      lines.push(sep);
+      add('* ' + sanitizeText(seccion.area || '').toUpperCase() + ' *', { bold: true, center: true });
+      lines.push(sep);
+      addItems(seccion.items);
+    }
+  } else {
     lines.push(sep);
+    if (anulacion && payload.motivo) {
+      add('MOTIVO: ' + sanitizeText(payload.motivo).toUpperCase(), { bold: true });
+      lines.push(sep);
+    }
+    if (anulacion) add(width < 17 ? '* NO PREPARAR *' : '** NO PREPARAR **', { bold: true, center: true });
+    else lines.push('CANT  PRODUCTO');
+    lines.push(sep);
+    addItems(payload.items);
   }
 
-  lines.push(bold + center('** NO PREPARAR **', width) + boldOff);
-  lines.push(sep);
-
-  for (const item of payload.items || []) {
-    const name = sanitizeText((item.nombre || item.producto || '').toUpperCase()).substring(0, Math.max(10, width - 6));
-    const qty = String(Math.abs(Number(item.cantidad) || 1)).padStart(3, ' ');
-    lines.push(bold + `${qty}  ${name}` + boldOff);
-    if (item.comentario) lines.push(`      > ${sanitizeText(item.comentario)}`);
-    lines.push('');
+  if (anulacion) {
+    lines.push(sepX);
+    add('** ANULADO **', { bold: true, center: true });
   }
-
-  lines.push(sepX);
-  lines.push(bold + center('** ANULADO **', width) + boldOff);
-  lines.push(sepX, '', '', '', '');
-  return lines.join('\n');
+  lines.push(anulacion ? sepX : sep2);
+  if (size !== 1) {
+    lines[3] = escFontSize(size) + lines[3];
+    lines[lines.length - 1] += escFontSize(1);
+  }
+  return lines.concat('', '', '', '').join('\n');
 }

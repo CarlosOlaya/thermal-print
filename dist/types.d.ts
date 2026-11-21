@@ -1,8 +1,11 @@
+export declare const COMANDA_FONT_SIZES: readonly ["normal", "grande", "extra_grande"];
+export type ComandaFontSize = (typeof COMANDA_FONT_SIZES)[number];
 export interface ThermalRenderOptions {
     columns?: number;
     timezone?: string;
     now?: Date;
     footer?: string;
+    comandaFontSize?: ComandaFontSize;
     /**
      * La precuenta de domicilio o para llevar no pega al final los datos de entrega
      * porque salen aparte, en sticker (`renderStickerEntrega`).
