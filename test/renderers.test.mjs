@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {
   center,
+  LOGO_SCALES,
   renderCierreCaja,
   renderComanda,
   renderCorreccion,
@@ -49,16 +50,23 @@ for (const columns of [32, 48]) {
     renderPrecuenta({ tenant_nombre: 'BRASA' }, { columns, now }),
     renderCierreCaja({ tenant_nombre: 'BRASA' }, { columns, now }),
   ];
-  for (const receipt of receipts) {
-    const bytes = textToEscPosBytes(receipt, { logo: logoCompleto, leftMarginDots: 0 });
-    assert.deepEqual(Array.from(bytes.slice(6, 17)), [
-      0x1b, 0x61, 1, 0x1d, 0x76, 0x30, 0, 36, 0, 160, 0,
-    ]);
-    const inicio = 17 + 36 * 160;
-    assert.deepEqual(Array.from(bytes.slice(inicio, inicio + 6)), [0x1b, 0x61, 0, 0x1b, 0x4a, 16]);
-    assert.deepEqual(bytes.slice(inicio + 6), textToEscPosBytes(receipt.replace(/^\n+/, '')).slice(2));
+  for (const escala of LOGO_SCALES) {
+    for (const receipt of receipts) {
+      const bytes = textToEscPosBytes(receipt, { logo: { ...logoCompleto, escala }, leftMarginDots: 0 });
+      const ancho = Math.ceil(18 * escala / 100);
+      const alto = 80 * escala / 100;
+      assert.deepEqual(Array.from(bytes.slice(6, 17)), [
+        0x1b, 0x61, 1, 0x1d, 0x76, 0x30, 0, ancho, 0, alto, 0,
+      ]);
+      const inicio = 17 + ancho * alto;
+      assert.deepEqual(Array.from(bytes.slice(inicio, inicio + 6)), [0x1b, 0x61, 0, 0x1b, 0x4a, 16]);
+      assert.deepEqual(bytes.slice(inicio + 6), textToEscPosBytes(receipt.replace(/^\n+/, '')).slice(2));
+    }
   }
 }
+const logoOriginal = textToEscPosBytes(textoConNombre, { logo: { ...logo, escala: 100 } });
+assert.deepEqual(Array.from(logoOriginal.slice(8, 15)), [0, 1, 0, 2, 0, 0x80, 0x1b]);
+assert.deepEqual(textToEscPosBytes(textoConNombre, { cut: true, logo: { ...logo, escala: 300 } }), conLogo);
 
 const comanda = renderComanda({
   comanda: 12,

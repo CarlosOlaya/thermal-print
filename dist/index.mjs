@@ -99,6 +99,8 @@ var ESC = "\x1B";
 var GS = "";
 var MAX_LOGO_WIDTH_BYTES = 18;
 var MAX_LOGO_HEIGHT = 80;
+var LOGO_SCALES = [75, 100, 125, 150, 175, 200];
+var DEFAULT_LOGO_SCALE = 200;
 function rasterLogoBytes(logo) {
   if (!logo) return [];
   const { widthBytes, height, data } = logo;
@@ -110,18 +112,20 @@ function rasterLogoBytes(logo) {
     return [];
   }
   if (image.length !== widthBytes * height) return [];
-  const raster = [];
-  for (let y = 0; y < height; y++) {
-    const row = [];
-    for (let x = 0; x < widthBytes; x++) {
-      const byte = image.charCodeAt(y * widthBytes + x);
-      let wide = 0;
-      for (let mask = 128; mask > 0; mask >>= 1) {
-        wide = wide << 2 | (byte & mask ? 3 : 0);
+  const scale = logo.escala !== void 0 && LOGO_SCALES.includes(logo.escala) ? logo.escala : DEFAULT_LOGO_SCALE;
+  const width = widthBytes * 8;
+  const scaledWidth = Math.round(width * scale / 100);
+  const scaledHeight = Math.max(1, Math.round(height * scale / 100));
+  const scaledWidthBytes = Math.ceil(scaledWidth / 8);
+  const raster = new Uint8Array(scaledWidthBytes * scaledHeight);
+  for (let y = 0; y < scaledHeight; y++) {
+    const sourceRow = Math.floor(y * height / scaledHeight) * widthBytes;
+    for (let x = 0; x < scaledWidth; x++) {
+      const sourceX = Math.floor(x * width / scaledWidth);
+      if (image.charCodeAt(sourceRow + (sourceX >> 3)) & 128 >> sourceX % 8) {
+        raster[y * scaledWidthBytes + (x >> 3)] |= 128 >> x % 8;
       }
-      row.push(wide >> 8, wide & 255);
     }
-    raster.push(...row, ...row);
   }
   return [
     27,
@@ -131,9 +135,9 @@ function rasterLogoBytes(logo) {
     118,
     48,
     0,
-    widthBytes * 2,
+    scaledWidthBytes,
     0,
-    height * 2,
+    scaledHeight,
     0,
     ...raster,
     27,
@@ -2162,7 +2166,9 @@ function isRecord2(value) {
 }
 export {
   COMANDA_FONT_SIZES,
+  DEFAULT_LOGO_SCALE,
   ESC,
+  LOGO_SCALES,
   MAX_LOGO_HEIGHT,
   MAX_LOGO_WIDTH_BYTES,
   center,

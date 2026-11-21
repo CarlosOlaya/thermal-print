@@ -15,12 +15,16 @@ export interface RasterLogo {
   widthBytes: number;
   height: number;
   data: string;
+  escala?: LogoScale;
 }
 
 export const MAX_LOGO_WIDTH_BYTES = 18;
 export const MAX_LOGO_HEIGHT = 80;
+export const LOGO_SCALES = [75, 100, 125, 150, 175, 200] as const;
+export type LogoScale = (typeof LOGO_SCALES)[number];
+export const DEFAULT_LOGO_SCALE: LogoScale = 200;
 
-/** Duplica cada punto del logo guardado (hasta 288 × 160), incluso en las tirillas de 58 mm. */
+/** Escala el logo guardado dentro de un máximo de 288 × 160 puntos (cabe en 58 mm). */
 function rasterLogoBytes(logo?: RasterLogo): number[] {
   if (!logo) return [];
   const { widthBytes, height, data } = logo;
@@ -34,22 +38,25 @@ function rasterLogoBytes(logo?: RasterLogo): number[] {
     return [];
   }
   if (image.length !== widthBytes * height) return [];
-  const raster: number[] = [];
-  for (let y = 0; y < height; y++) {
-    const row: number[] = [];
-    for (let x = 0; x < widthBytes; x++) {
-      const byte = image.charCodeAt(y * widthBytes + x);
-      let wide = 0;
-      for (let mask = 0x80; mask > 0; mask >>= 1) {
-        wide = (wide << 2) | (byte & mask ? 0b11 : 0);
+  const scale = logo.escala !== undefined && LOGO_SCALES.includes(logo.escala)
+    ? logo.escala : DEFAULT_LOGO_SCALE;
+  const width = widthBytes * 8;
+  const scaledWidth = Math.round(width * scale / 100);
+  const scaledHeight = Math.max(1, Math.round(height * scale / 100));
+  const scaledWidthBytes = Math.ceil(scaledWidth / 8);
+  const raster = new Uint8Array(scaledWidthBytes * scaledHeight);
+  for (let y = 0; y < scaledHeight; y++) {
+    const sourceRow = Math.floor(y * height / scaledHeight) * widthBytes;
+    for (let x = 0; x < scaledWidth; x++) {
+      const sourceX = Math.floor(x * width / scaledWidth);
+      if (image.charCodeAt(sourceRow + (sourceX >> 3)) & (0x80 >> (sourceX % 8))) {
+        raster[y * scaledWidthBytes + (x >> 3)] |= 0x80 >> (x % 8);
       }
-      row.push(wide >> 8, wide & 0xff);
     }
-    raster.push(...row, ...row);
   }
   return [
     0x1b, 0x61, 0x01,
-    0x1d, 0x76, 0x30, 0x00, widthBytes * 2, 0x00, height * 2, 0x00,
+    0x1d, 0x76, 0x30, 0x00, scaledWidthBytes, 0x00, scaledHeight, 0x00,
     ...raster,
     0x1b, 0x61, 0x00,
     0x1b, 0x4a, 16, // Separa el logo del nombre con unos 2 mm de avance (203 dpi).

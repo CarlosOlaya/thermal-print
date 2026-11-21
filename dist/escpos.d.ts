@@ -10,9 +10,13 @@ export interface RasterLogo {
     widthBytes: number;
     height: number;
     data: string;
+    escala?: LogoScale;
 }
 export declare const MAX_LOGO_WIDTH_BYTES = 18;
 export declare const MAX_LOGO_HEIGHT = 80;
+export declare const LOGO_SCALES: readonly [75, 100, 125, 150, 175, 200];
+export type LogoScale = (typeof LOGO_SCALES)[number];
+export declare const DEFAULT_LOGO_SCALE: LogoScale;
 export declare function escBold(active: boolean): string;
 export declare function escFontSize(size: 1 | 2 | 3 | 4): string;
 export declare function escCut(): string;

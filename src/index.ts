@@ -22,6 +22,8 @@ export { COMANDA_FONT_SIZES } from './types';
 
 export {
   ESC,
+  DEFAULT_LOGO_SCALE,
+  LOGO_SCALES,
   MAX_LOGO_HEIGHT,
   MAX_LOGO_WIDTH_BYTES,
   escBeep,
@@ -33,6 +35,7 @@ export {
   qrMarker,
   textToEscPosBytes,
   type EscPosByteOptions,
+  type LogoScale,
   type RasterLogo,
 } from './escpos';
 export { center, formatDate, formatMoney, formatTime, labelMetodo, leftRight, sanitizeText } from './utils';
