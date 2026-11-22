@@ -43,6 +43,28 @@ function leftRight(left, right, width = 48) {
   const gap = width - safeLeft.length - safeRight.length;
   return safeLeft + " ".repeat(Math.max(gap, 1)) + safeRight;
 }
+function wrapWords(value, width) {
+  const clean = String(value || "").trim();
+  if (clean.length <= width) return [clean];
+  const out = [];
+  let actual = "";
+  for (const palabra of clean.split(/\s+/)) {
+    const tentativa = actual ? `${actual} ${palabra}` : palabra;
+    if (tentativa.length <= width) {
+      actual = tentativa;
+      continue;
+    }
+    if (actual) out.push(actual);
+    if (palabra.length > width) {
+      for (let i = 0; i < palabra.length; i += width) out.push(palabra.slice(i, i + width));
+      actual = out.pop() || "";
+    } else {
+      actual = palabra;
+    }
+  }
+  if (actual) out.push(actual);
+  return out;
+}
 function itemRow(qty, name, right, width = 48) {
   const qtyStr = String(Number(qty) || 1).padStart(2, " ");
   const safeRight = sanitizeText(right);
@@ -99,7 +121,7 @@ var ESC = "\x1B";
 var GS = "";
 var MAX_LOGO_WIDTH_BYTES = 18;
 var MAX_LOGO_HEIGHT = 80;
-var LOGO_SCALES = [75, 100, 125, 150, 175, 200];
+var LOGO_SCALES = [75, 100, 125, 150, 175, 200, 225, 250, 275, 300, 325, 350, 375, 400];
 var DEFAULT_LOGO_SCALE = 200;
 function rasterLogoBytes(logo) {
   if (!logo) return [];
@@ -112,14 +134,23 @@ function rasterLogoBytes(logo) {
     return [];
   }
   if (image.length !== widthBytes * height) return [];
+  let firstInk = 0;
+  let lastInk = image.length - 1;
+  while (firstInk <= lastInk && image.charCodeAt(firstInk) === 0) firstInk++;
+  if (firstInk > lastInk) return [];
+  while (image.charCodeAt(lastInk) === 0) lastInk--;
+  const top = Math.floor(firstInk / widthBytes);
+  const inkHeight = Math.floor(lastInk / widthBytes) - top + 1;
   const scale = logo.escala !== void 0 && LOGO_SCALES.includes(logo.escala) ? logo.escala : DEFAULT_LOGO_SCALE;
   const width = widthBytes * 8;
-  const scaledWidth = Math.round(width * scale / 100);
-  const scaledHeight = Math.max(1, Math.round(height * scale / 100));
+  const paperDots = logo.columns === 48 ? 576 : 384;
+  const ratio = Math.min(scale / 100, paperDots / width);
+  const scaledWidth = Math.round(width * ratio);
+  const scaledHeight = Math.max(1, Math.round(inkHeight * ratio));
   const scaledWidthBytes = Math.ceil(scaledWidth / 8);
   const raster = new Uint8Array(scaledWidthBytes * scaledHeight);
   for (let y = 0; y < scaledHeight; y++) {
-    const sourceRow = Math.floor(y * height / scaledHeight) * widthBytes;
+    const sourceRow = (top + Math.floor(y * inkHeight / scaledHeight)) * widthBytes;
     for (let x = 0; x < scaledWidth; x++) {
       const sourceX = Math.floor(x * width / scaledWidth);
       if (image.charCodeAt(sourceRow + (sourceX >> 3)) & 128 >> sourceX % 8) {
@@ -137,16 +168,14 @@ function rasterLogoBytes(logo) {
     0,
     scaledWidthBytes,
     0,
-    scaledHeight,
-    0,
+    scaledHeight & 255,
+    scaledHeight >> 8,
     ...raster,
     27,
     97,
     0,
-    27,
-    74,
-    16
-    // Separa el logo del nombre con unos 2 mm de avance (203 dpi).
+    10
+    // Una línea completa entre el raster y el nombre.
   ];
 }
 function escBold(active) {
@@ -752,6 +781,29 @@ function isRecord(value) {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
+// src/renderers/receipt-header.ts
+function oneLine(value) {
+  return sanitizeText(value).replace(/\s+/g, " ").trim();
+}
+function receiptContactLines(telefono, direccion, width) {
+  const tel = oneLine(telefono);
+  return [tel && `Tel: ${tel}`, oneLine(direccion)].filter(Boolean).flatMap((line) => wrapWords(line, width).map((part) => center(part, width)));
+}
+function receiptServiceLines(mesero, mesa, width) {
+  const nombreMesero = oneLine(mesero);
+  const nombreMesa = oneLine(mesa);
+  const izquierda = nombreMesero ? `Mesero: ${nombreMesero}` : "";
+  const bold = (line) => escBold(true) + line + escBold(false);
+  if (izquierda && nombreMesa && izquierda.length + 2 + nombreMesa.length <= width) {
+    const gap = " ".repeat(width - izquierda.length - nombreMesa.length);
+    return [izquierda + gap + bold(nombreMesa)];
+  }
+  return [
+    ...izquierda ? wrapWords(izquierda, width) : [],
+    ...nombreMesa ? wrapWords(nombreMesa, width).map(bold) : []
+  ];
+}
+
 // src/renderers/factura.ts
 function renderFactura(factura, options = {}) {
   const width = clampColumns(options.columns);
@@ -768,8 +820,8 @@ function renderFactura(factura, options = {}) {
     datos.push(`Fecha: ${formatDate(now, timezone)}`);
     datos.push(`Hora:  ${formatTime(now, timezone)}`);
   }
-  datos.push(sanitizeText(factura.mesa_nombre || `Mesa: ${factura.mesa_numero || ""}`));
-  datos.push(`Mesero: ${sanitizeText(factura.mesero || "")}`);
+  const mesa = factura.mesa_nombre || (factura.mesa_numero ? `Mesa: ${factura.mesa_numero}` : "");
+  datos.push(...receiptServiceLines(factura.mesero, mesa, width));
   renderCliente(datos, factura);
   const detalle = [];
   if (fiscal) renderItemsFiscales(detalle, factura.items || [], width, desgloseImpuestos(factura) !== null);
@@ -823,13 +875,14 @@ function negrilla(linea) {
   return escBold(true) + linea + escBold(false);
 }
 function centrado(lines, texto2, width) {
-  for (const l of wrapWords(texto2, width)) lines.push(center(l, width));
+  for (const l of wrapWords2(texto2, width)) lines.push(center(l, width));
 }
 function renderEncabezado(lines, factura, width) {
   const emisor = factura.fe?.emisor;
   if (!emisor?.razon_social) {
-    if (factura.tenant_nombre) lines.push(center(String(factura.tenant_nombre).toUpperCase(), width));
+    if (factura.tenant_nombre) centrado(lines, sanitizeText(factura.tenant_nombre).toUpperCase(), width);
     if (factura.nit) lines.push(center(`NIT: ${factura.nit}`, width));
+    lines.push(...receiptContactLines(factura.telefono, factura.direccion, width));
     return;
   }
   const marca = factura.tenant_nombre || emisor.nombre_comercial;
@@ -838,6 +891,7 @@ function renderEncabezado(lines, factura, width) {
   }
   centrado(lines, sanitizeText(emisor.razon_social).toUpperCase(), width);
   if (emisor.nit) lines.push(center(`NIT: ${sanitizeText(emisor.nit)}`, width));
+  lines.push(...receiptContactLines(factura.telefono, factura.direccion, width));
   for (const calidad of factura.fe?.responsabilidades || []) {
     if (calidad) centrado(lines, sanitizeText(calidad), width);
   }
@@ -904,7 +958,7 @@ function renderFiscal(lines, fe, width) {
     }
   }
 }
-function wrapWords(text2, width) {
+function wrapWords2(text2, width) {
   const clean = String(text2 || "").trim();
   if (clean.length <= width) return [clean];
   const out = [];
@@ -1230,7 +1284,7 @@ function dondeSeUsa(bono) {
   return `En ${nombres.slice(0, -1).join(", ")} o ${nombres[nombres.length - 1]}.`;
 }
 function centradoNegrilla(lines, texto2, width) {
-  for (const l of wrapWords(sanitizeText(texto2), width)) lines.push(negrilla(center(l, width)));
+  for (const l of wrapWords2(sanitizeText(texto2), width)) lines.push(negrilla(center(l, width)));
 }
 function fechaCorta(iso) {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ""));
@@ -1250,11 +1304,10 @@ function renderPrecuenta(data, options = {}) {
   const propina = numOrDefault(data.propina_sugerida, Math.round(subtotal * propinaPct / 100));
   const total = num(data.total);
   const domicilio = num(data.recaudo_domicilio_monto);
-  const mesaNombre = text(data.mesa_nombre || `MESA: ${data.mesa_numero || ""}`);
+  const mesaNombre = text(data.mesa_nombre || (data.mesa_numero ? `Mesa: ${data.mesa_numero}` : ""));
   const esDelivery = /domicilio|llevar/i.test(mesaNombre);
   pushDateTime(lines, ctx);
-  lines.push(escBold(true) + mesaNombre + escBold(false));
-  lines.push(`MESERO: ${text(data.mesero)}`);
+  lines.push(...receiptServiceLines(data.mesero, mesaNombre, ctx.width));
   lines.push(ctx.sep);
   renderItemTable(lines, arr(data.items), ctx, "nombre", false);
   lines.push(leftRight("SUBTOTAL:", money(subtotal + descuentoMesa), ctx.width));
@@ -1265,22 +1318,23 @@ function renderPrecuenta(data, options = {}) {
   }
   if (num(data.monto_servicio) > 0 && !esDelivery) lines.push(leftRight("Servicio:", money(data.monto_servicio), ctx.width));
   if (num(data.monto_iva) > 0) lines.push(leftRight("IVA:", money(data.monto_iva), ctx.width));
-  lines.push(ctx.sep);
+  const totalEnNegrilla = (label, valor) => escBold(true) + leftRight(label, money(valor), ctx.width) + escBold(false);
   if (propina > 0 && !esDelivery) {
-    lines.push(leftRight(`SERVICIO SUGERIDO (${propinaPct}%):`, money(propina), ctx.width));
-    lines.push(ctx.sep);
-    lines.push(leftRight("TOTAL + SERVICIO:", money(total + propina), ctx.width));
+    const label = `SERVICIO SUGERIDO (${propinaPct}%):`;
+    const importe = money(propina);
+    const rotulo = label.length + 1 + importe.length > ctx.width ? label.replace("SERVICIO", "SERV.") : label;
+    pushLabelValue(lines, rotulo, importe, ctx);
+    lines.push(totalEnNegrilla("TOTAL + SERVICIO:", total + propina));
   } else if (domicilio > 0) {
     lines.push(leftRight("TOTAL PEDIDO:", money(total), ctx.width));
     lines.push(leftRight("DOMICILIO:", money(domicilio), ctx.width));
-    lines.push(ctx.sep);
-    lines.push(escBold(true) + leftRight("TOTAL A PAGAR:", money(num(data.total_cliente) || total + domicilio), ctx.width) + escBold(false));
+    lines.push(totalEnNegrilla("TOTAL A PAGAR:", num(data.total_cliente) || total + domicilio));
   } else {
-    lines.push(leftRight("TOTAL A PAGAR:", money(total), ctx.width));
+    lines.push(totalEnNegrilla("TOTAL A PAGAR:", total));
   }
   lines.push(ctx.sep2);
   lines.push("");
-  lines.push(center("Documento no fiscal - verificacion", ctx.width));
+  lines.push(center("Documento no fiscal", ctx.width));
   lines.push(center("Gracias por su visita!", ctx.width));
   lines.push(footer(ctx.width, options.footer));
   if (esDelivery && isRecord2(data.cliente) && !options.datosEntregaAparte) {
@@ -1734,38 +1788,16 @@ function renderReservasDia(data, options = {}) {
   lines.push(leftRight("Total personas:", personas, ctx.width));
   lines.push(ctx.sep2);
   lines.push("");
-  for (const linea of wrapWords2("Organice las mesas segun esta agenda.", ctx.width)) {
+  for (const linea of wrapWords("Organice las mesas segun esta agenda.", ctx.width)) {
     lines.push(center(linea, ctx.width));
   }
   lines.push(footer(ctx.width, options.footer));
   return lines.join("\n");
 }
 function pushWrapped(lines, label, value, ctx) {
-  const partes = wrapWords2(`${label}: ${text(value)}`, ctx.width - 4);
+  const partes = wrapWords(`${label}: ${text(value)}`, ctx.width - 4);
   lines.push(`  ${partes[0]}`);
   for (const parte of partes.slice(1)) lines.push(`    ${parte}`);
-}
-function wrapWords2(value, width) {
-  const clean = String(value || "").trim();
-  if (clean.length <= width) return [clean];
-  const out = [];
-  let actual = "";
-  for (const palabra of clean.split(/\s+/)) {
-    const tentativa = actual ? `${actual} ${palabra}` : palabra;
-    if (tentativa.length <= width) {
-      actual = tentativa;
-      continue;
-    }
-    if (actual) out.push(actual);
-    if (palabra.length > width) {
-      for (let i = 0; i < palabra.length; i += width) out.push(palabra.slice(i, i + width));
-      actual = out.pop() || "";
-    } else {
-      actual = palabra;
-    }
-  }
-  if (actual) out.push(actual);
-  return out;
 }
 function hora12(raw) {
   const [h, m] = String(raw ?? "").split(":");
@@ -1976,11 +2008,11 @@ function renderRetirosCaja(retiros, columns) {
     const concepto = text(retiro.concepto).replace(/\s+/g, " ").trim() || "Retiro";
     const espacioConcepto = width - amount.length - 3;
     if (espacioConcepto < 4) {
-      for (const line of wrapWords2(concepto, width - 2)) lines.push(`  ${line}`);
+      for (const line of wrapWords(concepto, width - 2)) lines.push(`  ${line}`);
       lines.push(rightPadMoney(amount, width));
       continue;
     }
-    const [first, ...rest] = wrapWords2(concepto, espacioConcepto);
+    const [first, ...rest] = wrapWords(concepto, espacioConcepto);
     lines.push(leftRight(`  ${first}`, amount, width));
     for (const line of rest) lines.push(`    ${line}`);
   }
@@ -2062,7 +2094,7 @@ function renderActaEntrega(lines, data, relevo, ctx) {
     lines.push(leftRight("- Retiro:", `-${money(relevo.retiro_monto)}`, ctx.width));
     const concepto = text(relevo.retiro_concepto).replace(/\s+/g, " ").trim();
     if (concepto) {
-      const partes = wrapWords2(concepto, ctx.width - 4);
+      const partes = wrapWords(concepto, ctx.width - 4);
       partes.forEach((parte, i) => {
         lines.push(`${i === 0 ? "  (" : "   "}${parte}${i === partes.length - 1 ? ")" : ""}`);
       });
@@ -2079,7 +2111,7 @@ function pushLabelValue(lines, label, value, ctx) {
     return;
   }
   lines.push(label);
-  for (const parte of wrapWords2(limpio, ctx.width - 2)) lines.push(`  ${parte}`);
+  for (const parte of wrapWords(limpio, ctx.width - 2)) lines.push(`  ${parte}`);
 }
 function pushFirmas(lines, ctx) {
   const ancho = Math.floor((ctx.width - 6) / 2);
@@ -2093,8 +2125,7 @@ function header(data, title, ctx) {
   const lines = [];
   if (data.tenant_nombre) lines.push(center(text(data.tenant_nombre).toUpperCase(), ctx.width));
   if (data.nit) lines.push(center(`NIT: ${text(data.nit)}`, ctx.width));
-  if (data.telefono) lines.push(center(`Tel: ${text(data.telefono)}`, ctx.width));
-  if (data.direccion) lines.push(center(text(data.direccion), ctx.width));
+  lines.push(...receiptContactLines(data.telefono, data.direccion, ctx.width));
   lines.push(ctx.sep2);
   lines.push(escBold(true) + center(title, ctx.width) + escBold(false));
   lines.push(ctx.sep2);

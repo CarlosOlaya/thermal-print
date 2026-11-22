@@ -1,4 +1,5 @@
 import { escBold } from '../escpos';
+import { receiptContactLines, receiptServiceLines } from './receipt-header';
 import type {
   ThermalDocumentPayload,
   ThermalReciboAbonoPayload,
@@ -18,6 +19,7 @@ import {
   leftRight,
   rightPadMoney,
   sanitizeText,
+  wrapWords,
 } from '../utils';
 
 type Row = Record<string, unknown>;
@@ -31,12 +33,11 @@ export function renderPrecuenta(data: ThermalDocumentPayload, options: ThermalRe
   const propina = numOrDefault(data.propina_sugerida, Math.round(subtotal * propinaPct / 100));
   const total = num(data.total);
   const domicilio = num(data.recaudo_domicilio_monto);
-  const mesaNombre = text(data.mesa_nombre || `MESA: ${data.mesa_numero || ''}`);
+  const mesaNombre = text(data.mesa_nombre || (data.mesa_numero ? `Mesa: ${data.mesa_numero}` : ''));
   const esDelivery = /domicilio|llevar/i.test(mesaNombre);
 
   pushDateTime(lines, ctx);
-  lines.push(escBold(true) + mesaNombre + escBold(false));
-  lines.push(`MESERO: ${text(data.mesero)}`);
+  lines.push(...receiptServiceLines(data.mesero, mesaNombre, ctx.width));
   lines.push(ctx.sep);
   renderItemTable(lines, arr(data.items), ctx, 'nombre', false);
 
@@ -48,24 +49,26 @@ export function renderPrecuenta(data: ThermalDocumentPayload, options: ThermalRe
   }
   if (num(data.monto_servicio) > 0 && !esDelivery) lines.push(leftRight('Servicio:', money(data.monto_servicio), ctx.width));
   if (num(data.monto_iva) > 0) lines.push(leftRight('IVA:', money(data.monto_iva), ctx.width));
-  lines.push(ctx.sep);
 
+  const totalEnNegrilla = (label: string, valor: number) =>
+    escBold(true) + leftRight(label, money(valor), ctx.width) + escBold(false);
   if (propina > 0 && !esDelivery) {
-    lines.push(leftRight(`SERVICIO SUGERIDO (${propinaPct}%):`, money(propina), ctx.width));
-    lines.push(ctx.sep);
-    lines.push(leftRight('TOTAL + SERVICIO:', money(total + propina), ctx.width));
+    const label = `SERVICIO SUGERIDO (${propinaPct}%):`;
+    const importe = money(propina);
+    const rotulo = label.length + 1 + importe.length > ctx.width ? label.replace('SERVICIO', 'SERV.') : label;
+    pushLabelValue(lines, rotulo, importe, ctx);
+    lines.push(totalEnNegrilla('TOTAL + SERVICIO:', total + propina));
   } else if (domicilio > 0) {
     lines.push(leftRight('TOTAL PEDIDO:', money(total), ctx.width));
     lines.push(leftRight('DOMICILIO:', money(domicilio), ctx.width));
-    lines.push(ctx.sep);
-    lines.push(escBold(true) + leftRight('TOTAL A PAGAR:', money(num(data.total_cliente) || total + domicilio), ctx.width) + escBold(false));
+    lines.push(totalEnNegrilla('TOTAL A PAGAR:', num(data.total_cliente) || total + domicilio));
   } else {
-    lines.push(leftRight('TOTAL A PAGAR:', money(total), ctx.width));
+    lines.push(totalEnNegrilla('TOTAL A PAGAR:', total));
   }
 
   lines.push(ctx.sep2);
   lines.push('');
-  lines.push(center('Documento no fiscal - verificacion', ctx.width));
+  lines.push(center('Documento no fiscal', ctx.width));
   lines.push(center('Gracias por su visita!', ctx.width));
   lines.push(footer(ctx.width, options.footer));
 
@@ -610,30 +613,6 @@ function pushWrapped(lines: string[], label: string, value: unknown, ctx: Ctx): 
   for (const parte of partes.slice(1)) lines.push(`    ${parte}`);
 }
 
-/** Envuelve por palabras; una palabra más larga que el ancho se corta duro. */
-function wrapWords(value: string, width: number): string[] {
-  const clean = String(value || '').trim();
-  if (clean.length <= width) return [clean];
-  const out: string[] = [];
-  let actual = '';
-  for (const palabra of clean.split(/\s+/)) {
-    const tentativa = actual ? `${actual} ${palabra}` : palabra;
-    if (tentativa.length <= width) {
-      actual = tentativa;
-      continue;
-    }
-    if (actual) out.push(actual);
-    if (palabra.length > width) {
-      for (let i = 0; i < palabra.length; i += width) out.push(palabra.slice(i, i + width));
-      actual = out.pop() || '';
-    } else {
-      actual = palabra;
-    }
-  }
-  if (actual) out.push(actual);
-  return out;
-}
-
 /** 'HH:MM[:SS]' (24h) → ' 7:00 PM' — ancho fijo de 8 para que las horas alineen. */
 function hora12(raw: unknown): string {
   const [h, m] = String(raw ?? '').split(':');
@@ -1022,8 +1001,7 @@ function header(data: ThermalDocumentPayload, title: string, ctx: Ctx): string[]
   const lines: string[] = [];
   if (data.tenant_nombre) lines.push(center(text(data.tenant_nombre).toUpperCase(), ctx.width));
   if (data.nit) lines.push(center(`NIT: ${text(data.nit)}`, ctx.width));
-  if (data.telefono) lines.push(center(`Tel: ${text(data.telefono)}`, ctx.width));
-  if (data.direccion) lines.push(center(text(data.direccion), ctx.width));
+  lines.push(...receiptContactLines(data.telefono, data.direccion, ctx.width));
   lines.push(ctx.sep2);
   lines.push(escBold(true) + center(title, ctx.width) + escBold(false));
   lines.push(ctx.sep2);

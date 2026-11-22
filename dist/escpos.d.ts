@@ -11,10 +11,12 @@ export interface RasterLogo {
     height: number;
     data: string;
     escala?: LogoScale;
+    /** Ancho del ticket que lleva este logo. Sin dato se usa el límite de 58 mm. */
+    columns?: number;
 }
 export declare const MAX_LOGO_WIDTH_BYTES = 18;
 export declare const MAX_LOGO_HEIGHT = 80;
-export declare const LOGO_SCALES: readonly [75, 100, 125, 150, 175, 200];
+export declare const LOGO_SCALES: readonly [75, 100, 125, 150, 175, 200, 225, 250, 275, 300, 325, 350, 375, 400];
 export type LogoScale = (typeof LOGO_SCALES)[number];
 export declare const DEFAULT_LOGO_SCALE: LogoScale;
 export declare function escBold(active: boolean): string;

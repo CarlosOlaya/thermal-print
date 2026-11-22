@@ -57,6 +57,30 @@ export function leftRight(left: unknown, right: unknown, width = 48): string {
   return safeLeft + ' '.repeat(Math.max(gap, 1)) + safeRight;
 }
 
+/** Envuelve por palabras; una palabra más larga que el ancho se corta duro. */
+export function wrapWords(value: string, width: number): string[] {
+  const clean = String(value || '').trim();
+  if (clean.length <= width) return [clean];
+  const out: string[] = [];
+  let actual = '';
+  for (const palabra of clean.split(/\s+/)) {
+    const tentativa = actual ? `${actual} ${palabra}` : palabra;
+    if (tentativa.length <= width) {
+      actual = tentativa;
+      continue;
+    }
+    if (actual) out.push(actual);
+    if (palabra.length > width) {
+      for (let i = 0; i < palabra.length; i += width) out.push(palabra.slice(i, i + width));
+      actual = out.pop() || '';
+    } else {
+      actual = palabra;
+    }
+  }
+  if (actual) out.push(actual);
+  return out;
+}
+
 /**
  * Fila de ítem en UNA sola línea: "cant nombre ........... valor".
  * El nombre se trunca para que la cantidad, el nombre y el valor derecho quepan en

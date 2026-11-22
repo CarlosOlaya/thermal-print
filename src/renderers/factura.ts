@@ -8,6 +8,7 @@ import type {
   ThermalRenderOptions,
 } from '../types';
 import { escBold, escCut, qrMarker } from '../escpos';
+import { receiptContactLines, receiptServiceLines } from './receipt-header';
 import {
   AVANCE_CORTE,
   center,
@@ -47,8 +48,8 @@ export function renderFactura(factura: FacturaCerradaPayload, options: ThermalRe
     datos.push(`Fecha: ${formatDate(now, timezone)}`);
     datos.push(`Hora:  ${formatTime(now, timezone)}`);
   }
-  datos.push(sanitizeText(factura.mesa_nombre || `Mesa: ${factura.mesa_numero || ''}`));
-  datos.push(`Mesero: ${sanitizeText(factura.mesero || '')}`);
+  const mesa = factura.mesa_nombre || (factura.mesa_numero ? `Mesa: ${factura.mesa_numero}` : '');
+  datos.push(...receiptServiceLines(factura.mesero, mesa, width));
   renderCliente(datos, factura);
 
   const detalle: string[] = [];
@@ -147,8 +148,9 @@ function centrado(lines: string[], texto: string, width: number): void {
 function renderEncabezado(lines: string[], factura: FacturaCerradaPayload, width: number): void {
   const emisor = factura.fe?.emisor;
   if (!emisor?.razon_social) {
-    if (factura.tenant_nombre) lines.push(center(String(factura.tenant_nombre).toUpperCase(), width));
+    if (factura.tenant_nombre) centrado(lines, sanitizeText(factura.tenant_nombre).toUpperCase(), width);
     if (factura.nit) lines.push(center(`NIT: ${factura.nit}`, width));
+    lines.push(...receiptContactLines(factura.telefono, factura.direccion, width));
     return;
   }
   const marca = factura.tenant_nombre || emisor.nombre_comercial;
@@ -157,6 +159,7 @@ function renderEncabezado(lines: string[], factura: FacturaCerradaPayload, width
   }
   centrado(lines, sanitizeText(emisor.razon_social).toUpperCase(), width);
   if (emisor.nit) lines.push(center(`NIT: ${sanitizeText(emisor.nit)}`, width));
+  lines.push(...receiptContactLines(factura.telefono, factura.direccion, width));
   for (const calidad of factura.fe?.responsabilidades || []) {
     if (calidad) centrado(lines, sanitizeText(calidad), width);
   }

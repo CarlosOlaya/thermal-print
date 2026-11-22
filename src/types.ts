@@ -85,6 +85,8 @@ export interface FacturaCerradaPayload {
   numero_factura?: string;
   tenant_nombre?: string;
   nit?: string;
+  telefono?: string;
+  direccion?: string;
   mesa_numero?: number;
   mesa_nombre?: string;
   localizador?: string;

@@ -16,15 +16,17 @@ export interface RasterLogo {
   height: number;
   data: string;
   escala?: LogoScale;
+  /** Ancho del ticket que lleva este logo. Sin dato se usa el límite de 58 mm. */
+  columns?: number;
 }
 
 export const MAX_LOGO_WIDTH_BYTES = 18;
 export const MAX_LOGO_HEIGHT = 80;
-export const LOGO_SCALES = [75, 100, 125, 150, 175, 200] as const;
+export const LOGO_SCALES = [75, 100, 125, 150, 175, 200, 225, 250, 275, 300, 325, 350, 375, 400] as const;
 export type LogoScale = (typeof LOGO_SCALES)[number];
 export const DEFAULT_LOGO_SCALE: LogoScale = 200;
 
-/** Escala el logo guardado dentro de un máximo de 288 × 160 puntos (cabe en 58 mm). */
+/** Recorta filas blancas y escala el logo al ancho útil sin deformarlo. */
 function rasterLogoBytes(logo?: RasterLogo): number[] {
   if (!logo) return [];
   const { widthBytes, height, data } = logo;
@@ -38,15 +40,24 @@ function rasterLogoBytes(logo?: RasterLogo): number[] {
     return [];
   }
   if (image.length !== widthBytes * height) return [];
+  let firstInk = 0;
+  let lastInk = image.length - 1;
+  while (firstInk <= lastInk && image.charCodeAt(firstInk) === 0) firstInk++;
+  if (firstInk > lastInk) return [];
+  while (image.charCodeAt(lastInk) === 0) lastInk--;
+  const top = Math.floor(firstInk / widthBytes);
+  const inkHeight = Math.floor(lastInk / widthBytes) - top + 1;
   const scale = logo.escala !== undefined && LOGO_SCALES.includes(logo.escala)
     ? logo.escala : DEFAULT_LOGO_SCALE;
   const width = widthBytes * 8;
-  const scaledWidth = Math.round(width * scale / 100);
-  const scaledHeight = Math.max(1, Math.round(height * scale / 100));
+  const paperDots = logo.columns === 48 ? 576 : 384;
+  const ratio = Math.min(scale / 100, paperDots / width);
+  const scaledWidth = Math.round(width * ratio);
+  const scaledHeight = Math.max(1, Math.round(inkHeight * ratio));
   const scaledWidthBytes = Math.ceil(scaledWidth / 8);
   const raster = new Uint8Array(scaledWidthBytes * scaledHeight);
   for (let y = 0; y < scaledHeight; y++) {
-    const sourceRow = Math.floor(y * height / scaledHeight) * widthBytes;
+    const sourceRow = (top + Math.floor(y * inkHeight / scaledHeight)) * widthBytes;
     for (let x = 0; x < scaledWidth; x++) {
       const sourceX = Math.floor(x * width / scaledWidth);
       if (image.charCodeAt(sourceRow + (sourceX >> 3)) & (0x80 >> (sourceX % 8))) {
@@ -56,10 +67,10 @@ function rasterLogoBytes(logo?: RasterLogo): number[] {
   }
   return [
     0x1b, 0x61, 0x01,
-    0x1d, 0x76, 0x30, 0x00, scaledWidthBytes, 0x00, scaledHeight, 0x00,
+    0x1d, 0x76, 0x30, 0x00, scaledWidthBytes, 0x00, scaledHeight & 0xff, scaledHeight >> 8,
     ...raster,
     0x1b, 0x61, 0x00,
-    0x1b, 0x4a, 16, // Separa el logo del nombre con unos 2 mm de avance (203 dpi).
+    0x0a, // Una línea completa entre el raster y el nombre.
   ];
 }
 

@@ -35,12 +35,12 @@ const logo = { widthBytes: 1, height: 2, data: Buffer.from([0x80, 0x1b]).toStrin
 const textoConNombre = '\n \r\nMI RESTAURANTE\n';
 const sinLogo = textToEscPosBytes(textoConNombre, { cut: true });
 const conLogo = textToEscPosBytes(textoConNombre, { cut: true, logo });
-assert.deepEqual(Array.from(conLogo.slice(0, 27)), [
+assert.deepEqual(Array.from(conLogo.slice(0, 25)), [
   0x1b, 0x40, 0x1b, 0x61, 1, 0x1d, 0x76, 0x30, 0,
   2, 0, 4, 0, 0xc0, 0, 0xc0, 0, 3, 0xcf, 3, 0xcf,
-  0x1b, 0x61, 0, 0x1b, 0x4a, 16,
+  0x1b, 0x61, 0, 0x0a,
 ]);
-assert.deepEqual(conLogo.slice(27), textToEscPosBytes(textoConNombre.trimStart(), { cut: true }).slice(2));
+assert.deepEqual(conLogo.slice(25), textToEscPosBytes(textoConNombre.trimStart(), { cut: true }).slice(2));
 assert.deepEqual(textToEscPosBytes(textoConNombre, { cut: true, logo: { ...logo, height: 3 } }), sinLogo);
 
 const logoCompleto = { widthBytes: 18, height: 80, data: Buffer.alloc(18 * 80, 0xff).toString('base64') };
@@ -52,21 +52,47 @@ for (const columns of [32, 48]) {
   ];
   for (const escala of LOGO_SCALES) {
     for (const receipt of receipts) {
-      const bytes = textToEscPosBytes(receipt, { logo: { ...logoCompleto, escala }, leftMarginDots: 0 });
-      const ancho = Math.ceil(18 * escala / 100);
-      const alto = 80 * escala / 100;
+      const bytes = textToEscPosBytes(receipt, { logo: { ...logoCompleto, escala, columns }, leftMarginDots: 0 });
+      const factor = Math.min(escala / 100, columns * 12 / 144);
+      const ancho = Math.ceil(18 * factor);
+      const alto = Math.round(80 * factor);
       assert.deepEqual(Array.from(bytes.slice(6, 17)), [
-        0x1b, 0x61, 1, 0x1d, 0x76, 0x30, 0, ancho, 0, alto, 0,
+        0x1b, 0x61, 1, 0x1d, 0x76, 0x30, 0, ancho, 0, alto & 0xff, alto >> 8,
       ]);
       const inicio = 17 + ancho * alto;
-      assert.deepEqual(Array.from(bytes.slice(inicio, inicio + 6)), [0x1b, 0x61, 0, 0x1b, 0x4a, 16]);
-      assert.deepEqual(bytes.slice(inicio + 6), textToEscPosBytes(receipt.replace(/^\n+/, '')).slice(2));
+      assert.deepEqual(Array.from(bytes.slice(inicio, inicio + 4)), [0x1b, 0x61, 0, 0x0a]);
+      assert.deepEqual(bytes.slice(inicio + 4), textToEscPosBytes(receipt.replace(/^\n+/, '')).slice(2));
     }
   }
 }
 const logoOriginal = textToEscPosBytes(textoConNombre, { logo: { ...logo, escala: 100 } });
 assert.deepEqual(Array.from(logoOriginal.slice(8, 15)), [0, 1, 0, 2, 0, 0x80, 0x1b]);
-assert.deepEqual(textToEscPosBytes(textoConNombre, { cut: true, logo: { ...logo, escala: 300 } }), conLogo);
+assert.deepEqual(textToEscPosBytes(textoConNombre, { cut: true, logo: { ...logo, escala: 425 } }), conLogo);
+const conBordesBlancos = { ...logo, height: 4, data: Buffer.from([0, 0x80, 0x1b, 0]).toString('base64') };
+assert.deepEqual(textToEscPosBytes(textoConNombre, { cut: true, logo: conBordesBlancos }), conLogo);
+
+for (const columns of [32, 48]) {
+  const datos = {
+    tenant_nombre: 'BRASA', telefono: '+57 300 111 2233',
+    direccion: 'Carrera 15 # 12-75, entrada por la Avenida Principal',
+    mesa_nombre: 'Salon 12', mesero: 'Juan Ramirez', items: [],
+    subtotal: 321100, total: 321100, propina_sugerida: 32110,
+  };
+  for (const render of [renderFactura, renderPrecuenta]) {
+    const text = render(datos, { columns, now }).replace(/\x1bE[\x00\x01]/g, '');
+    const lines = text.split('\n');
+    assert.ok(lines.every(line => line.length <= columns));
+    assert.match(text, /Tel: \+57 300 111 2233/);
+    assert.match(lines.map(line => line.trim()).join(' '), /Carrera 15 # 12-75, entrada por la Avenida Principal/);
+    assert.match(text, /Mesero: Juan Ramirez {2,}Salon 12/);
+    const largos = render({ ...datos, mesero: 'Juan Pablo Ramirez de la Torre', mesa_nombre: 'Salon terraza de las orquideas 12' }, { columns, now })
+      .replace(/\x1bE[\x00\x01]/g, '').split('\n');
+    assert.ok(largos.every(line => line.length <= columns));
+    assert.match(largos.map(line => line.trim()).join(' '), /Juan Pablo Ramirez de la Torre Salon terraza de las orquideas 12/);
+  }
+  const verificacion = renderPrecuenta(datos, { columns, now });
+  assert.match(verificacion, /SUBTOTAL: +\$321\.100\nSERVICIO SUGERIDO \(10%\): +\$32\.110\n\x1bE\x01TOTAL \+ SERVICIO: +\$353\.210\x1bE\x00/);
+}
 
 const comanda = renderComanda({
   comanda: 12,

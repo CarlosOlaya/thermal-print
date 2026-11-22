@@ -11,6 +11,8 @@ export declare function sanitizeText(value: unknown): string;
 export declare function labelMetodo(raw: unknown): string;
 export declare function center(text: unknown, width?: number): string;
 export declare function leftRight(left: unknown, right: unknown, width?: number): string;
+/** Envuelve por palabras; una palabra más larga que el ancho se corta duro. */
+export declare function wrapWords(value: string, width: number): string[];
 /**
  * Fila de ítem en UNA sola línea: "cant nombre ........... valor".
  * El nombre se trunca para que la cantidad, el nombre y el valor derecho quepan en
