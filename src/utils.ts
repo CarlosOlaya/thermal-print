@@ -1,3 +1,5 @@
+import { FOODLY_FOOTER_MARKER } from './foodly-footer';
+
 const METODO_LABELS: Record<string, string> = {
   efectivo: 'Efectivo',
   tarjeta: 'Tarjeta',
@@ -136,11 +138,11 @@ export function formatTime(date: Date, timezone = 'America/Bogota'): string {
  */
 export const AVANCE_CORTE: readonly string[] = ['', '', '', '', ''];
 
-export function footer(width = 48, text = 'Desarrollado por www.foodly.com.co'): string {
-  // En 58mm la marca completa no cabe (34 > 32) y la impresora dejaba "co"
-  // solo en otra línea: sin el "www." sí cabe.
-  const marca = text.length > width ? text.replace(/www\./i, '') : text;
-  return ['', center(marca, width), ...AVANCE_CORTE].join('\n');
+export function footer(width = 48, text?: string): string {
+  const marca = text === undefined
+    ? FOODLY_FOOTER_MARKER + center('Foodly', width)
+    : center(text.length > width ? text.replace(/www\./i, '') : text, width);
+  return ['', marca, ...AVANCE_CORTE].join('\n');
 }
 
 export function clampColumns(columns?: number): number {

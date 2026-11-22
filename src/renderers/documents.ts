@@ -1,5 +1,5 @@
 import { escBold } from '../escpos';
-import { receiptContactLines, receiptServiceLines } from './receipt-header';
+import { receiptContactLines, receiptDetailsLines } from './receipt-header';
 import type {
   ThermalDocumentPayload,
   ThermalReciboAbonoPayload,
@@ -36,8 +36,7 @@ export function renderPrecuenta(data: ThermalDocumentPayload, options: ThermalRe
   const mesaNombre = text(data.mesa_nombre || (data.mesa_numero ? `Mesa: ${data.mesa_numero}` : ''));
   const esDelivery = /domicilio|llevar/i.test(mesaNombre);
 
-  pushDateTime(lines, ctx);
-  lines.push(...receiptServiceLines(mesaNombre, data.mesero, ctx.width));
+  lines.push(...receiptDetailsLines(mesaNombre, data.mesero, ctx.width, ctx.now, ctx.timezone));
   lines.push(ctx.sep);
   renderItemTable(lines, arr(data.items), ctx, 'nombre', false);
 

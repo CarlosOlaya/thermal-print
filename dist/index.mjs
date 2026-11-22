@@ -5,6 +5,19 @@ var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "sy
 // src/types.ts
 var COMANDA_FONT_SIZES = ["normal", "grande", "extra_grande"];
 
+// src/foodly-footer.ts
+var FOODLY_FOOTER_RASTER = {
+  widthBytes: 6,
+  height: 48,
+  data: "AAAAAAAAAA/////8AD/////8AP/////8Af/////4A//////4B//////4D/gD///wD4AB///gH//A///AH//A//+AH4AAAAAAH4AAAAAAP//AAAAAP//AAAAAP4AAAAAAP4ACAAAAP//+AAAAP//8H8AAP//4P/gAP/AA//wAP8AA//8APwAH//8APA////+AOD////+AMP////+AIf////8AA//B//8AB/+A//4AD/8Af/gAD/4AP+AAH/4AAgAAH/wAAAAAH/wAAAAAH/wAAAAAP/wAAAAAP/wAAAAAP/wAAAAAP/wAAAAAP/wAAAAAP/wAAAAAP/wAAAAAP/wAAAAAP/wAAAAAP/gAAAAAP/AAAAAAP+AAAAAAH4AAAAAA",
+  escala: 100
+};
+var FOODLY_FOOTER_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwAQMAAABtzGvEAAAABlBMVEVMaXEAAACaXKEdAAAAAXRSTlMAQObYZgAAAAlwSFlzAAAD6AAAA+gBtXtSawAAAIpJREFUGJWlz7ENwzAMBdFzXLjUCEI2SJkiAEcLR1M20QguVRj+AU0XTh01D2BBnuB8RdIGluhgCgZzsiRlzNJK8UnqVDWpJU71Y9eJqV05h37L4Z5stQXDBtjK0dCQwOIivKLMeUaZ84gI5x7ArE+wyGNdEe8BZcc61J24VLdM+sH+ZCRr0i+f/gLyOXSGKeqgaAAAAABJRU5ErkJggg==";
+var FOODLY_FOOTER_MARKER = "";
+function isFoodlyFooterLine(line) {
+  return line.startsWith(FOODLY_FOOTER_MARKER) && line.slice(1).trimStart() === "Foodly";
+}
+
 // src/utils.ts
 var METODO_LABELS = {
   efectivo: "Efectivo",
@@ -103,9 +116,9 @@ function formatTime(date, timezone = "America/Bogota") {
   }
 }
 var AVANCE_CORTE = ["", "", "", "", ""];
-function footer(width = 48, text2 = "Desarrollado por www.foodly.com.co") {
-  const marca = text2.length > width ? text2.replace(/www\./i, "") : text2;
-  return ["", center(marca, width), ...AVANCE_CORTE].join("\n");
+function footer(width = 48, text2) {
+  const marca = text2 === void 0 ? FOODLY_FOOTER_MARKER + center("Foodly", width) : center(text2.length > width ? text2.replace(/www\./i, "") : text2, width);
+  return ["", marca, ...AVANCE_CORTE].join("\n");
 }
 function clampColumns(columns) {
   const numeric = Number(columns);
@@ -123,7 +136,7 @@ var MAX_LOGO_WIDTH_BYTES = 18;
 var MAX_LOGO_HEIGHT = 80;
 var LOGO_SCALES = [75, 100, 125, 150, 175, 200, 225, 250, 275, 300, 325, 350, 375, 400];
 var DEFAULT_LOGO_SCALE = 200;
-function rasterLogoBytes(logo) {
+function rasterLogoBytes(logo, feedAfter = true) {
   if (!logo) return [];
   const { widthBytes, height, data } = logo;
   if (!Number.isInteger(widthBytes) || widthBytes < 1 || widthBytes > MAX_LOGO_WIDTH_BYTES || !Number.isInteger(height) || height < 1 || height > MAX_LOGO_HEIGHT || typeof data !== "string" || data.length !== Math.ceil(widthBytes * height / 3) * 4) return [];
@@ -174,8 +187,8 @@ function rasterLogoBytes(logo) {
     27,
     97,
     0,
-    10
-    // Una línea completa entre el raster y el nombre.
+    ...feedAfter ? [10] : []
+    // Separa el logo de cabecera del nombre.
   ];
 }
 function escBold(active) {
@@ -275,6 +288,15 @@ function escQrCommandBytes(data, moduleSize) {
 function textSegmentToBytes(segment) {
   const bytes = [];
   for (let i = 0; i < segment.length; i++) {
+    if (segment[i] === FOODLY_FOOTER_MARKER && (i === 0 || segment[i - 1] === "\n")) {
+      const lineBreak = segment.indexOf("\n", i);
+      const end = lineBreak === -1 ? segment.length : lineBreak;
+      if (isFoodlyFooterLine(segment.slice(i, end))) {
+        bytes.push(...rasterLogoBytes(FOODLY_FOOTER_RASTER, false));
+        i = end - 1;
+        continue;
+      }
+    }
     const code = segment.charCodeAt(i);
     if (code === 27 || code === 29 || code === 10 || code === 13) {
       bytes.push(code);
@@ -789,18 +811,24 @@ function receiptContactLines(telefono, direccion, width) {
   const tel = oneLine(telefono);
   return [tel && `Tel: ${tel}`, oneLine(direccion)].filter(Boolean).flatMap((line) => wrapWords(line, width).map((part) => center(part, width)));
 }
-function receiptServiceLines(mesa, mesero, width) {
+function receiptDetailsLines(mesa, mesero, width, now, timezone) {
   const nombreMesa = oneLine(mesa);
   const nombreMesero = oneLine(mesero);
-  const derecha = nombreMesero ? `Mesero: ${nombreMesero}` : "";
+  const fecha = `Fecha: ${formatDate(now, timezone)}`;
+  const hora = `Hora: ${formatTime(now, timezone)}`;
+  const atencion = nombreMesero ? `Mesero: ${nombreMesero}` : "";
+  const column = width >= 42 ? 25 : Math.min(12, width - Math.max(hora.length, atencion.length));
+  const fitsPair = (left, right) => Boolean(left && right && left.length + 2 <= column && right.length <= width - column);
+  const servicePair = fitsPair(nombreMesa, atencion) && hora.length <= width - column;
+  const lines = fitsPair(fecha, hora) ? [fecha.padEnd(column) + hora] : [fecha, servicePair ? hora.padStart(column + hora.length) : hora];
   const bold = (line) => escBold(true) + line + escBold(false);
-  if (nombreMesa && derecha && nombreMesa.length + 2 + derecha.length <= width) {
-    const gap = " ".repeat(width - nombreMesa.length - derecha.length);
-    return [bold(nombreMesa) + gap + derecha];
+  if (servicePair) {
+    return [...lines, bold(nombreMesa) + " ".repeat(column - nombreMesa.length) + atencion];
   }
   return [
+    ...lines,
     ...nombreMesa ? wrapWords(nombreMesa, width).map(bold) : [],
-    ...derecha ? wrapWords(derecha, width) : []
+    ...atencion ? wrapWords(atencion, width) : []
   ];
 }
 
@@ -814,14 +842,8 @@ function renderFactura(factura, options = {}) {
   renderEncabezado(encabezado, factura, width);
   const datos = [];
   if (!fiscal) datos.push(center(factura.numero_factura || "PEDIDO", width));
-  if (width >= 42) {
-    datos.push(`Fecha: ${formatDate(now, timezone)}        Hora: ${formatTime(now, timezone)}`);
-  } else {
-    datos.push(`Fecha: ${formatDate(now, timezone)}`);
-    datos.push(`Hora:  ${formatTime(now, timezone)}`);
-  }
   const mesa = factura.mesa_nombre || (factura.mesa_numero ? `Mesa: ${factura.mesa_numero}` : "");
-  datos.push(...receiptServiceLines(mesa, factura.mesero, width));
+  datos.push(...receiptDetailsLines(mesa, factura.mesero, width, now, timezone));
   renderCliente(datos, factura);
   const detalle = [];
   if (fiscal) renderItemsFiscales(detalle, factura.items || [], width, desgloseImpuestos(factura) !== null);
@@ -1306,8 +1328,7 @@ function renderPrecuenta(data, options = {}) {
   const domicilio = num(data.recaudo_domicilio_monto);
   const mesaNombre = text(data.mesa_nombre || (data.mesa_numero ? `Mesa: ${data.mesa_numero}` : ""));
   const esDelivery = /domicilio|llevar/i.test(mesaNombre);
-  pushDateTime(lines, ctx);
-  lines.push(...receiptServiceLines(mesaNombre, data.mesero, ctx.width));
+  lines.push(...receiptDetailsLines(mesaNombre, data.mesero, ctx.width, ctx.now, ctx.timezone));
   lines.push(ctx.sep);
   renderItemTable(lines, arr(data.items), ctx, "nombre", false);
   lines.push(leftRight("SUBTOTAL:", money(subtotal + descuentoMesa), ctx.width));
@@ -2199,6 +2220,7 @@ export {
   COMANDA_FONT_SIZES,
   DEFAULT_LOGO_SCALE,
   ESC,
+  FOODLY_FOOTER_PNG,
   LOGO_SCALES,
   MAX_LOGO_HEIGHT,
   MAX_LOGO_WIDTH_BYTES,
@@ -2212,6 +2234,7 @@ export {
   formatDate,
   formatMoney,
   formatTime,
+  isFoodlyFooterLine,
   labelMetodo,
   leftRight,
   qrMarker,

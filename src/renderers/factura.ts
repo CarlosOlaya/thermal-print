@@ -8,15 +8,13 @@ import type {
   ThermalRenderOptions,
 } from '../types';
 import { escBold, escCut, qrMarker } from '../escpos';
-import { receiptContactLines, receiptServiceLines } from './receipt-header';
+import { receiptContactLines, receiptDetailsLines } from './receipt-header';
 import {
   AVANCE_CORTE,
   center,
   clampColumns,
   footer,
-  formatDate,
   formatMoney,
-  formatTime,
   itemRow,
   labelMetodo,
   leftRight,
@@ -42,14 +40,8 @@ export function renderFactura(factura: FacturaCerradaPayload, options: ThermalRe
   // DIAN; mostrar ambos confunde el pedido interno con el número autorizado.
   // Sin FE aceptada se conserva el PED para la trazabilidad de control interno.
   if (!fiscal) datos.push(center(factura.numero_factura || 'PEDIDO', width));
-  if (width >= 42) {
-    datos.push(`Fecha: ${formatDate(now, timezone)}        Hora: ${formatTime(now, timezone)}`);
-  } else {
-    datos.push(`Fecha: ${formatDate(now, timezone)}`);
-    datos.push(`Hora:  ${formatTime(now, timezone)}`);
-  }
   const mesa = factura.mesa_nombre || (factura.mesa_numero ? `Mesa: ${factura.mesa_numero}` : '');
-  datos.push(...receiptServiceLines(mesa, factura.mesero, width));
+  datos.push(...receiptDetailsLines(mesa, factura.mesero, width, now, timezone));
   renderCliente(datos, factura);
 
   const detalle: string[] = [];

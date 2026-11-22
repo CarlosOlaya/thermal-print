@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {
   center,
+  isFoodlyFooterLine,
   LOGO_SCALES,
   renderCierreCaja,
   renderComanda,
@@ -69,6 +70,18 @@ for (const columns of [32, 48]) {
       assert.deepEqual(bytes.slice(inicio + 4), textToEscPosBytes(receipt.replace(/^\n+/, '')).slice(2));
     }
   }
+  for (const receipt of receipts) {
+    assert.ok(receipt.split('\n').some(isFoodlyFooterLine));
+    assert.doesNotMatch(receipt, /foodly\.com\.co/i);
+    const bytes = Buffer.from(textToEscPosBytes(receipt, { cut: true }));
+    const firmaRaster = Buffer.from([0x1b, 0x61, 1, 0x1d, 0x76, 0x30, 0, 6, 0]);
+    const inicio = bytes.indexOf(firmaRaster);
+    assert.ok(inicio > 0);
+    const alto = bytes.readUInt16LE(inicio + firmaRaster.length);
+    assert.ok(alto >= 40 && alto <= 48);
+    const fin = inicio + firmaRaster.length + 2 + 6 * alto;
+    assert.deepEqual(bytes.subarray(fin), Buffer.from([0x1b, 0x61, 0, 10, 10, 10, 10, 10, 0x1d, 0x56, 0]));
+  }
 }
 const logoOriginal = textToEscPosBytes(textoConNombre, { logo: { ...logo, escala: 100 } });
 assert.deepEqual(Array.from(logoOriginal.slice(8, 15)), [0, 1, 0, 2, 0, 0x80, 0x1b]);
@@ -89,7 +102,12 @@ for (const columns of [32, 48]) {
     assert.ok(lines.every(line => line.length <= columns));
     assert.match(text, /Tel: \+57 300 111 2233/);
     assert.match(lines.map(line => line.trim()).join(' '), /Carrera 15 # 12-75, entrada por la Avenida Principal/);
-    assert.ok(lines.includes('Salon 12' + 'Mesero: Juan Ramirez'.padStart(columns - 'Salon 12'.length)));
+    const hora = lines.find(line => line.includes('Hora:'));
+    const mesa = lines.find(line => line.startsWith('Salon 12'));
+    const columna = columns === 32 ? 12 : 25;
+    assert.equal(hora?.indexOf('Hora:'), columna);
+    assert.equal(mesa?.indexOf('Mesero:'), columna);
+    assert.ok(mesa?.endsWith('Mesero: Juan Ramirez'));
     const largos = render({ ...datos, mesero: 'Juan Pablo Ramirez de la Torre', mesa_nombre: 'Salon terraza de las orquideas 12' }, { columns, now })
       .replace(/\x1bE[\x00\x01]/g, '').split('\n');
     assert.ok(largos.every(line => line.length <= columns));
@@ -672,7 +690,7 @@ const fiscalSinDuplicados = renderFactura({
 }, { now, columns: 32 });
 assert.doesNotMatch(fiscalSinDuplicados, /Cliente: Carlos Olaya/);
 assert.doesNotMatch(fiscalSinDuplicados, /CC: 1075317251-8/);
-assert.doesNotMatch(fiscalSinDuplicados, /Desarrollado por/);
+assert.ok(!fiscalSinDuplicados.split('\n').some(isFoodlyFooterLine));
 
 // El cliente operativo se conserva cuando no coincide con el adquirente DIAN.
 const fiscalClienteDiferente = renderFactura({
@@ -713,7 +731,7 @@ for (const w of [32, 48]) {
     `identificador operativo ausente sin FE (${w} col)`,
   );
   assert.match(noFiscal, /SOLO PARA CONTROL INTERNO/);
-  assert.match(noFiscal, /Desarrollado por/);
+  assert.ok(noFiscal.split('\n').some(isFoodlyFooterLine));
   assert.doesNotMatch(noFiscal, /CUDE:|CUFE:/);
 }
 

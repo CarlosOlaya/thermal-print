@@ -1,4 +1,5 @@
 import { sanitizeText } from './utils';
+import { FOODLY_FOOTER_MARKER, FOODLY_FOOTER_RASTER, isFoodlyFooterLine } from './foodly-footer';
 
 export const ESC = '\x1B';
 const GS = '\x1D';
@@ -27,7 +28,7 @@ export type LogoScale = (typeof LOGO_SCALES)[number];
 export const DEFAULT_LOGO_SCALE: LogoScale = 200;
 
 /** Recorta filas blancas y escala el logo al ancho útil sin deformarlo. */
-function rasterLogoBytes(logo?: RasterLogo): number[] {
+function rasterLogoBytes(logo?: RasterLogo, feedAfter = true): number[] {
   if (!logo) return [];
   const { widthBytes, height, data } = logo;
   if (!Number.isInteger(widthBytes) || widthBytes < 1 || widthBytes > MAX_LOGO_WIDTH_BYTES ||
@@ -70,7 +71,7 @@ function rasterLogoBytes(logo?: RasterLogo): number[] {
     0x1d, 0x76, 0x30, 0x00, scaledWidthBytes, 0x00, scaledHeight & 0xff, scaledHeight >> 8,
     ...raster,
     0x1b, 0x61, 0x00,
-    0x0a, // Una línea completa entre el raster y el nombre.
+    ...(feedAfter ? [0x0a] : []), // Separa el logo de cabecera del nombre.
   ];
 }
 
@@ -144,6 +145,15 @@ function escQrCommandBytes(data: string, moduleSize: number): number[] {
 function textSegmentToBytes(segment: string): number[] {
   const bytes: number[] = [];
   for (let i = 0; i < segment.length; i++) {
+    if (segment[i] === FOODLY_FOOTER_MARKER && (i === 0 || segment[i - 1] === '\n')) {
+      const lineBreak = segment.indexOf('\n', i);
+      const end = lineBreak === -1 ? segment.length : lineBreak;
+      if (isFoodlyFooterLine(segment.slice(i, end))) {
+        bytes.push(...rasterLogoBytes(FOODLY_FOOTER_RASTER, false));
+        i = end - 1;
+        continue;
+      }
+    }
     const code = segment.charCodeAt(i);
     if (code === 0x1b || code === 0x1d || code === 0x0a || code === 0x0d) {
       bytes.push(code);
