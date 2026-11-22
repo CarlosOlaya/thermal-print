@@ -369,7 +369,7 @@ function textToEscPosBytes(text2, options = {}) {
   const logo = rasterLogoBytes(options.logo);
   bytes.push(...logo);
   const document = [
-    logo.length ? (text2 || "").replace(/^(?:[ \t]*\r?\n)+/, "") : text2 || "",
+    (text2 || "").replace(/^(?:[ \t]*(?:\r\n?|\n))+/, ""),
     options.cut ? escCut() : "",
     options.beepAfterPrint ? escBeep() : ""
   ].join("");
@@ -433,7 +433,7 @@ function render(payload, options, anulacion) {
   const sep2 = "=".repeat(width);
   const sepX = "X".repeat(width);
   const bold = (text2) => escBold(true) + text2 + escBold(false);
-  const lines = [""];
+  const lines = [];
   function add(text2, style = {}) {
     for (const part of wrap(text2, width)) {
       const line = style.center ? center(part, width) : part;
@@ -510,7 +510,7 @@ function render(payload, options, anulacion) {
   }
   lines.push(anulacion ? sepX : sep2);
   if (size !== 1) {
-    lines[1] = escFontSize(size) + lines[1];
+    lines[0] = escFontSize(size) + lines[0];
     lines[lines.length - 1] += escFontSize(1);
   }
   return lines.concat("", "", "", "").join("\n");

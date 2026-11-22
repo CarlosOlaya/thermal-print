@@ -176,7 +176,7 @@ export function textToEscPosBytes(text: string, options: EscPosByteOptions = {})
   const logo = rasterLogoBytes(options.logo);
   bytes.push(...logo);
   const document = [
-    logo.length ? (text || '').replace(/^(?:[ \t]*\r?\n)+/, '') : text || '',
+    (text || '').replace(/^(?:[ \t]*(?:\r\n?|\n))+/, ''),
     options.cut ? escCut() : '',
     options.beepAfterPrint ? escBeep() : '',
   ].join('');

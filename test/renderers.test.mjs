@@ -34,6 +34,11 @@ const now = new Date('2026-05-27T15:30:00Z');
 const logo = { widthBytes: 1, height: 2, data: Buffer.from([0x80, 0x1b]).toString('base64') };
 const textoConNombre = '\n \r\nMI RESTAURANTE\n';
 const sinLogo = textToEscPosBytes(textoConNombre, { cut: true });
+assert.deepEqual(sinLogo, textToEscPosBytes('MI RESTAURANTE\n', { cut: true }));
+assert.deepEqual(
+  textToEscPosBytes('\r\n\t \n   NOMBRE CENTRADO\n', { cut: true }),
+  textToEscPosBytes('   NOMBRE CENTRADO\n', { cut: true }),
+);
 const conLogo = textToEscPosBytes(textoConNombre, { cut: true, logo });
 assert.deepEqual(Array.from(conLogo.slice(0, 25)), [
   0x1b, 0x40, 0x1b, 0x61, 1, 0x1d, 0x76, 0x30, 0,
@@ -175,14 +180,14 @@ for (const columns of [32, 48]) {
       { ...comandaLarga, tipo_comanda: 'anulacion', motivo: 'Cambio solicitado por el cliente' },
     ]) {
       const text = renderComanda(pedido, { columns, now, comandaFontSize });
-      assert.equal(text.match(/^\n*/)[0], '\n');
+      assert.ok(!text.startsWith('\n'));
       assert.ok(text.endsWith('\n\n\n\n'));
       const bytes = Buffer.from(textToEscPosBytes(text, { cut: true })).toString('latin1');
       if (escSize === 1) {
         assert.ok(!bytes.includes('\x1d\x21'));
       } else {
         const sizeCommand = escFontSize(escSize);
-        assert.equal(bytes.indexOf(sizeCommand), bytes.indexOf('\x1d\x21'));
+        assert.equal(bytes.indexOf(sizeCommand), 2);
         assert.ok(bytes.indexOf(sizeCommand) < bytes.indexOf('COMANDA #128'));
         assert.ok(bytes.indexOf(escFontSize(1)) > bytes.indexOf('Salsa'));
         assert.ok(bytes.indexOf(escCut()) > bytes.indexOf(escFontSize(1)));
