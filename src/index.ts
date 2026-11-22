@@ -19,7 +19,7 @@ export type {
   ThermalTomaInventarioPayload,
 } from './types';
 export { COMANDA_FONT_SIZES } from './types';
-export { FOODLY_FOOTER_PNG, isFoodlyFooterLine } from './foodly-footer';
+export { FOODLY_FOOTER_PDF_WIDTH, FOODLY_FOOTER_PNG, isFoodlyFooterLine } from './foodly-footer';
 
 export {
   ESC,

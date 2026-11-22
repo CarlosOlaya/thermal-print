@@ -6,6 +6,7 @@ import {
   renderCierreCaja,
   renderComanda,
   renderCorreccion,
+  renderDatosCliente,
   renderFactura,
   renderFacturasTurno,
   renderGastosTurno,
@@ -72,17 +73,21 @@ for (const columns of [32, 48]) {
   }
   for (const receipt of receipts) {
     assert.ok(receipt.split('\n').some(isFoodlyFooterLine));
-    assert.doesNotMatch(receipt, /foodly\.com\.co/i);
+    assert.match(receipt, /Desarrollado por foodly\.com\.co/);
     const bytes = Buffer.from(textToEscPosBytes(receipt, { cut: true }));
-    const firmaRaster = Buffer.from([0x1b, 0x61, 1, 0x1d, 0x76, 0x30, 0, 6, 0]);
+    const firmaRaster = Buffer.from([0x1b, 0x61, 1, 0x1d, 0x76, 0x30, 0]);
     const inicio = bytes.indexOf(firmaRaster);
     assert.ok(inicio > 0);
-    const alto = bytes.readUInt16LE(inicio + firmaRaster.length);
-    assert.ok(alto >= 40 && alto <= 48);
-    const fin = inicio + firmaRaster.length + 2 + 6 * alto;
+    const ancho = bytes.readUInt16LE(inicio + firmaRaster.length);
+    const alto = bytes.readUInt16LE(inicio + firmaRaster.length + 2);
+    assert.ok(ancho * 8 <= 32 * 12 && ancho * 8 > alto);
+    const fin = inicio + firmaRaster.length + 4 + ancho * alto;
+    assert.equal(bytes.indexOf(firmaRaster, fin), -1);
+    assert.equal(bytes.includes('Desarrollado por'), false);
     assert.deepEqual(bytes.subarray(fin), Buffer.from([0x1b, 0x61, 0, 10, 10, 10, 10, 10, 0x1d, 0x56, 0]));
   }
 }
+assert.deepEqual(textToEscPosBytes('\x1f  Foodly\n'), textToEscPosBytes('\x1f  Desarrollado por foodly.com.co\n'));
 const logoOriginal = textToEscPosBytes(textoConNombre, { logo: { ...logo, escala: 100 } });
 assert.deepEqual(Array.from(logoOriginal.slice(8, 15)), [0, 1, 0, 2, 0, 0x80, 0x1b]);
 assert.deepEqual(textToEscPosBytes(textoConNombre, { cut: true, logo: { ...logo, escala: 425 } }), conLogo);
@@ -115,6 +120,41 @@ for (const columns of [32, 48]) {
   }
   const verificacion = renderPrecuenta(datos, { columns, now });
   assert.match(verificacion, /SUBTOTAL: +\$321\.100\nSERVICIO SUGERIDO \(10%\): +\$32\.110\n\x1bE\x01TOTAL \+ SERVICIO: +\$353\.210\x1bE\x00/);
+}
+
+for (const columns of [32, 48]) {
+  const cliente = {
+    nombre: 'Ana Maria Perez de la Torre',
+    telefono: '3104567890',
+    direccion: 'Carrera 15 # 12-75 entrada por porteria norte',
+    barrio: 'Bosques de San Carlos',
+  };
+  const domicilio = { tenant_nombre: 'BRASA', mesa_nombre: 'Domicilio 3', cliente };
+  const entregas = renderDatosCliente(domicilio, { columns, now });
+  assert.ok(renderPrecuenta(domicilio, { columns, now }).endsWith(entregas));
+  const pedido = renderFactura({
+    ...domicilio,
+    cliente: cliente.nombre,
+    cliente_telefono: cliente.telefono,
+    cliente_direccion: cliente.direccion,
+    cliente_barrio: cliente.barrio,
+    items: [],
+  }, { columns, now });
+  const lines = entregas.split('\n').slice(5).filter(line => line.trim() && !line.startsWith('=') && !isFoodlyFooterLine(line));
+  const column = lines[0].indexOf('Tel:');
+  assert.ok(column > 0);
+  assert.equal(lines.find(line => line.startsWith('Dir:'))?.indexOf('Barrio:'), column);
+  assert.ok(lines.every(line => line.length <= columns));
+  assert.ok(pedido.includes(lines.join('\n')));
+  for (const [start, end, expected] of [
+    [0, column, `Cliente: ${cliente.nombre} Dir: ${cliente.direccion}`],
+    [column, columns, `Tel: ${cliente.telefono} Barrio: ${cliente.barrio}`],
+  ]) {
+    assert.equal(lines.map(line => line.slice(start, end).trim()).filter(Boolean).join(' '), expected);
+  }
+  const sinNombre = renderDatosCliente({ ...domicilio, cliente: { telefono: cliente.telefono, barrio: cliente.barrio } }, { columns, now });
+  assert.match(sinNombre, new RegExp(`^ {${column}}Tel: ${cliente.telefono}$`, 'm'));
+  assert.match(sinNombre, new RegExp(`^ {${column}}Barrio:`, 'm'));
 }
 
 const comanda = renderComanda({

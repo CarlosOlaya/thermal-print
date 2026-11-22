@@ -1,5 +1,5 @@
 import { escBold } from '../escpos';
-import { receiptContactLines, receiptDetailsLines } from './receipt-header';
+import { receiptContactLines, receiptCustomerLines, receiptDetailsLines } from './receipt-header';
 import type {
   ThermalDocumentPayload,
   ThermalReciboAbonoPayload,
@@ -100,10 +100,7 @@ export function renderDatosCliente(data: ThermalDocumentPayload, options: Therma
   lines.push(center(text(data.mesa_nombre).toUpperCase(), ctx.width));
   lines.push(ctx.sep2);
   lines.push('');
-  if (cliente.nombre) lines.push(escBold(true) + 'Cliente: ' + escBold(false) + text(cliente.nombre));
-  if (cliente.telefono) lines.push(escBold(true) + 'Telefono: ' + escBold(false) + text(cliente.telefono));
-  if (cliente.barrio) lines.push(escBold(true) + 'Barrio: ' + escBold(false) + text(cliente.barrio));
-  if (cliente.direccion) lines.push(escBold(true) + 'Direccion: ' + escBold(false) + text(cliente.direccion));
+  lines.push(...receiptCustomerLines(cliente, ctx.width));
   if (cliente.notas) {
     lines.push(ctx.sep);
     lines.push(escBold(true) + 'Notas:' + escBold(false));

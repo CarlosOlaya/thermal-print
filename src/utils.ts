@@ -1,4 +1,4 @@
-import { FOODLY_FOOTER_MARKER } from './foodly-footer';
+import { FOODLY_FOOTER_MARKER, FOODLY_FOOTER_TEXT } from './foodly-footer';
 
 const METODO_LABELS: Record<string, string> = {
   efectivo: 'Efectivo',
@@ -140,7 +140,7 @@ export const AVANCE_CORTE: readonly string[] = ['', '', '', '', ''];
 
 export function footer(width = 48, text?: string): string {
   const marca = text === undefined
-    ? FOODLY_FOOTER_MARKER + center('Foodly', width)
+    ? FOODLY_FOOTER_MARKER + center(FOODLY_FOOTER_TEXT.length <= width ? FOODLY_FOOTER_TEXT : 'Foodly', width)
     : center(text.length > width ? text.replace(/www\./i, '') : text, width);
   return ['', marca, ...AVANCE_CORTE].join('\n');
 }

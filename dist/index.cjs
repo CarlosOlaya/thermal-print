@@ -24,6 +24,7 @@ __export(index_exports, {
   COMANDA_FONT_SIZES: () => COMANDA_FONT_SIZES,
   DEFAULT_LOGO_SCALE: () => DEFAULT_LOGO_SCALE,
   ESC: () => ESC,
+  FOODLY_FOOTER_PDF_WIDTH: () => FOODLY_FOOTER_PDF_WIDTH,
   FOODLY_FOOTER_PNG: () => FOODLY_FOOTER_PNG,
   LOGO_SCALES: () => LOGO_SCALES,
   MAX_LOGO_HEIGHT: () => MAX_LOGO_HEIGHT,
@@ -71,16 +72,19 @@ module.exports = __toCommonJS(index_exports);
 var COMANDA_FONT_SIZES = ["normal", "grande", "extra_grande"];
 
 // src/foodly-footer.ts
+var FOODLY_FOOTER_TEXT = "Desarrollado por foodly.com.co";
 var FOODLY_FOOTER_RASTER = {
-  widthBytes: 6,
-  height: 48,
-  data: "AAAAAAAAAA/////8AD/////8AP/////8Af/////4A//////4B//////4D/gD///wD4AB///gH//A///AH//A//+AH4AAAAAAH4AAAAAAP//AAAAAP//AAAAAP4AAAAAAP4ACAAAAP//+AAAAP//8H8AAP//4P/gAP/AA//wAP8AA//8APwAH//8APA////+AOD////+AMP////+AIf////8AA//B//8AB/+A//4AD/8Af/gAD/4AP+AAH/4AAgAAH/wAAAAAH/wAAAAAH/wAAAAAP/wAAAAAP/wAAAAAP/wAAAAAP/wAAAAAP/wAAAAAP/wAAAAAP/wAAAAAP/wAAAAAP/wAAAAAP/gAAAAAP/AAAAAAP+AAAAAAH4AAAAAA",
-  escala: 100
+  widthBytes: 39,
+  height: 30,
+  data: "A///8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD///8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH///8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP///4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAfgf/4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAf8P/wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAfgP/AAAAAAAAAAAAADnAAAYAAAAAAAAHgAAAAZwAAAAAAAAAAAAA+AAAAAH+AAAAAAAAADnAAAYAAAAAAAAPgAAAAZwAAAAAAAAAAAAA/8AAAAH/gAAAAAAAADnAAAYAAAAAAAAOAAAAAZwAAAAAAAAAAAAA+AAAAAHDwAAAAAAAADnAAAYAAAAAAAAMAAAAAZwAAAAAAAAAAAAA//wAAAHAwfD4+HbsfDnHwPYfAHeD4dg/j4HwPZ3DgHw+Hc8AHw+A//n8AAHA4/n5/H78/znP4f4/wH/H+fg/H+P8f53DAPx/n/+APx/g/gP+AAHA5xmADnjxxznAc45xwHjOOeAMOOcc45zHAcDjnHHAcDjg+A//AAHA5hnADnDhg7nAcwZg4HDsHcAMMHYOwZzmAcDB3HHAcDBw4///gAHA5/3wfnDhg7nD8wZg4HDsHcAMMHYOwZxmAYDB3HHAYDBwz///gAHA5/h5/nDhg7nP8wZg4HDsHcAMMHYOwZxmAYDB3HHAYDBwn///AAHBxgAdjnDhg7nMcwZg4HDsHcAMMHYOwZx8AYDB3HHAYDBwP8P/AAHDxwgdjnDhxznMc45xwHHOOcAMOOcc45w8McDjnHHMcDjgf4H8AAH/g/n5/nDg/jnP8f4/gH/H8cAMH8P4f5w8OPx/HHHOPx/AfwAgAAH+AfHw/nDgfDnH8PYfAH+D4cAMD4HwPZw4MHw+HHHMHw+A/wAAAAAAAAAAAAAAAAAAAAAAAHAAAAAAAAAAAAA4AAAAAAAAAAAA/wAAAAAAAAAAAAAAAAAAAAAAAHAAAAAAAAAAAAAwAAAAAAAAAAAA/wAAAAAAAAAAAAAAAAAAAAAAAHAAAAAAAAAAAAHwAAAAAAAAAAAA/wAAAAAAAAAAAAAAAAAAAAAAAHAAAAAAAAAAAAHgAAAAAAAAAAAA/wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 };
-var FOODLY_FOOTER_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwAQMAAABtzGvEAAAABlBMVEVMaXEAAACaXKEdAAAAAXRSTlMAQObYZgAAAAlwSFlzAAAD6AAAA+gBtXtSawAAAIpJREFUGJWlz7ENwzAMBdFzXLjUCEI2SJkiAEcLR1M20QguVRj+AU0XTh01D2BBnuB8RdIGluhgCgZzsiRlzNJK8UnqVDWpJU71Y9eJqV05h37L4Z5stQXDBtjK0dCQwOIivKLMeUaZ84gI5x7ArE+wyGNdEe8BZcc61J24VLdM+sH+ZCRr0i+f/gLyOXSGKeqgaAAAAABJRU5ErkJggg==";
+var FOODLY_FOOTER_PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAATgAAAAeAQAAAACQhj9YAAABrElEQVR42q2TQWsTQRTHfzO7NiOCGaGChaJrycGj1YuHFNaQgx/DQ86SntRDdQxF1IPNByjSD1J0LIHiQc0HkLixQkRB1xJ0V7YZD4XYJFTn4P/05vGbP+/NvCeKkHLKPyWHeEmmnlwC2od7mfn5uTqRDycsdnzajfl1GOUGXOMI9zBwODlzf7oamceAM9OcmMrIkgWqdqaeGb8QCJxW6sn8Onms+zxeu3Dp9ep93XErZn1nb5n+dyMJQqD30xVZukb2PkvibPtTQvPZ8DkY8+Je1yTplhQ/RkCR3P06d+oa5VvNN5Rye+7qoEg2ReGqm8FT+3aAnBs6QGBRum7g0ZlEfViMUKunl+jDkgVUU57VGHCL3TbAwWSbhhhAg5w/zJy4bQCOnZ7wchfj3MXB3heAYNLv8593uVkFRi4D2DZw51vkzn+EbGO/R9y1vZhhmrWlrQXQqZcrbcQrDlrtK/F+6QYsVCoNyDsNw2h5IZI8eAeipU4CLZRQkaGuQddUjVCZ6yAjHYOb0cY42h1H8q9Tp4797wm52I87sjkC57cf8H854cl5GsrQj/sNYliy+nsdPPYAAAAASUVORK5CYII=";
+var FOODLY_FOOTER_PDF_WIDTH = FOODLY_FOOTER_RASTER.widthBytes * 8 * 72 / 203;
 var FOODLY_FOOTER_MARKER = "";
 function isFoodlyFooterLine(line) {
-  return line.startsWith(FOODLY_FOOTER_MARKER) && line.slice(1).trimStart() === "Foodly";
+  if (!line.startsWith(FOODLY_FOOTER_MARKER)) return false;
+  const text2 = line.slice(1).trimStart();
+  return text2 === FOODLY_FOOTER_TEXT || text2 === "Foodly";
 }
 
 // src/utils.ts
@@ -182,7 +186,7 @@ function formatTime(date, timezone = "America/Bogota") {
 }
 var AVANCE_CORTE = ["", "", "", "", ""];
 function footer(width = 48, text2) {
-  const marca = text2 === void 0 ? FOODLY_FOOTER_MARKER + center("Foodly", width) : center(text2.length > width ? text2.replace(/www\./i, "") : text2, width);
+  const marca = text2 === void 0 ? FOODLY_FOOTER_MARKER + center(FOODLY_FOOTER_TEXT.length <= width ? FOODLY_FOOTER_TEXT : "Foodly", width) : center(text2.length > width ? text2.replace(/www\./i, "") : text2, width);
   return ["", marca, ...AVANCE_CORTE].join("\n");
 }
 function clampColumns(columns) {
@@ -201,7 +205,7 @@ var MAX_LOGO_WIDTH_BYTES = 18;
 var MAX_LOGO_HEIGHT = 80;
 var LOGO_SCALES = [75, 100, 125, 150, 175, 200, 225, 250, 275, 300, 325, 350, 375, 400];
 var DEFAULT_LOGO_SCALE = 200;
-function rasterLogoBytes(logo, feedAfter = true) {
+function rasterLogoBytes(logo) {
   if (!logo) return [];
   const { widthBytes, height, data } = logo;
   if (!Number.isInteger(widthBytes) || widthBytes < 1 || widthBytes > MAX_LOGO_WIDTH_BYTES || !Number.isInteger(height) || height < 1 || height > MAX_LOGO_HEIGHT || typeof data !== "string" || data.length !== Math.ceil(widthBytes * height / 3) * 4) return [];
@@ -236,6 +240,9 @@ function rasterLogoBytes(logo, feedAfter = true) {
       }
     }
   }
+  return [...centeredRasterBytes(scaledWidthBytes, scaledHeight, raster), 10];
+}
+function centeredRasterBytes(widthBytes, height, raster) {
   return [
     27,
     97,
@@ -244,18 +251,21 @@ function rasterLogoBytes(logo, feedAfter = true) {
     118,
     48,
     0,
-    scaledWidthBytes,
-    0,
-    scaledHeight & 255,
-    scaledHeight >> 8,
+    widthBytes & 255,
+    widthBytes >> 8,
+    height & 255,
+    height >> 8,
     ...raster,
     27,
     97,
-    0,
-    ...feedAfter ? [10] : []
-    // Separa el logo de cabecera del nombre.
+    0
   ];
 }
+var footerRasterBytes = centeredRasterBytes(
+  FOODLY_FOOTER_RASTER.widthBytes,
+  FOODLY_FOOTER_RASTER.height,
+  Array.from(atob(FOODLY_FOOTER_RASTER.data), (byte) => byte.charCodeAt(0))
+);
 function escBold(active) {
   return ESC + (active ? "E" : "E\0");
 }
@@ -357,7 +367,7 @@ function textSegmentToBytes(segment) {
       const lineBreak = segment.indexOf("\n", i);
       const end = lineBreak === -1 ? segment.length : lineBreak;
       if (isFoodlyFooterLine(segment.slice(i, end))) {
-        bytes.push(...rasterLogoBytes(FOODLY_FOOTER_RASTER, false));
+        bytes.push(...footerRasterBytes);
         i = end - 1;
         continue;
       }
@@ -876,6 +886,26 @@ function receiptContactLines(telefono, direccion, width) {
   const tel = oneLine(telefono);
   return [tel && `Tel: ${tel}`, oneLine(direccion)].filter(Boolean).flatMap((line) => wrapWords(line, width).map((part) => center(part, width)));
 }
+function receiptCustomerLines(customer, width) {
+  const labelValue = (label, value) => {
+    const text2 = oneLine(value);
+    return text2 && `${label}: ${text2}`;
+  };
+  const name = labelValue("Cliente", customer.nombre);
+  const phone = labelValue("Tel", customer.telefono);
+  const address = labelValue("Dir", customer.direccion);
+  const neighborhood = labelValue("Barrio", customer.barrio);
+  const column = width >= 42 ? 25 : Math.floor(width / 2);
+  const pair = (left, right) => {
+    const leftLines = left ? wrapWords(left, column - 1) : [];
+    const rightLines = right ? wrapWords(right, width - column) : [];
+    return Array.from({ length: Math.max(leftLines.length, rightLines.length) }, (_, i) => {
+      const leftLine = leftLines[i] ?? "";
+      return rightLines[i] ? leftLine.padEnd(column) + rightLines[i] : leftLine;
+    });
+  };
+  return phone || neighborhood ? [...pair(name, phone), ...pair(address, neighborhood)] : [name, address].filter(Boolean).flatMap((line) => wrapWords(line, width));
+}
 function receiptDetailsLines(mesa, mesero, width, now, timezone) {
   const nombreMesa = oneLine(mesa);
   const nombreMesero = oneLine(mesero);
@@ -909,7 +939,7 @@ function renderFactura(factura, options = {}) {
   if (!fiscal) datos.push(center(factura.numero_factura || "PEDIDO", width));
   const mesa = factura.mesa_nombre || (factura.mesa_numero ? `Mesa: ${factura.mesa_numero}` : "");
   datos.push(...receiptDetailsLines(mesa, factura.mesero, width, now, timezone));
-  renderCliente(datos, factura);
+  renderCliente(datos, factura, width);
   const detalle = [];
   if (fiscal) renderItemsFiscales(detalle, factura.items || [], width, desgloseImpuestos(factura) !== null);
   else renderItems(detalle, factura.items || [], width);
@@ -1002,19 +1032,19 @@ function fiscalYaIdentifica(factura) {
   if (doc) return adqNorm.includes(normalizar(doc));
   return !!nombre && adqNorm.includes(normalizar(nombre));
 }
-function renderCliente(lines, factura) {
+function renderCliente(lines, factura, width) {
   const duplicado = fiscalYaIdentifica(factura);
   const nombre = factura.cliente;
-  if (!duplicado && nombre && nombre !== "Consumidor final") {
-    lines.push(`Cliente: ${sanitizeText(nombre)}`);
-  }
+  lines.push(...receiptCustomerLines({
+    nombre: duplicado || nombre === "Consumidor final" ? void 0 : nombre,
+    telefono: factura.cliente_telefono,
+    direccion: factura.cliente_direccion,
+    barrio: factura.cliente_barrio
+  }, width));
   if (!duplicado && factura.cliente_documento) {
     const sigla = TIPO_DOC_SIGLA[factura.cliente_tipo_documento ?? ""] ?? "Doc";
     lines.push(`${sigla}: ${sanitizeText(factura.cliente_documento)}`);
   }
-  if (factura.cliente_telefono) lines.push(`Tel: ${sanitizeText(factura.cliente_telefono)}`);
-  if (factura.cliente_direccion) lines.push(`Dir: ${sanitizeText(factura.cliente_direccion)}`);
-  if (factura.cliente_barrio) lines.push(`Barrio: ${sanitizeText(factura.cliente_barrio)}`);
   if (factura.localizador) lines.push(`Localizador: ${sanitizeText(factura.localizador)}`);
 }
 function renderFiscal(lines, fe, width) {
@@ -1448,10 +1478,7 @@ function renderDatosCliente(data, options = {}) {
   lines.push(center(text(data.mesa_nombre).toUpperCase(), ctx.width));
   lines.push(ctx.sep2);
   lines.push("");
-  if (cliente.nombre) lines.push(escBold(true) + "Cliente: " + escBold(false) + text(cliente.nombre));
-  if (cliente.telefono) lines.push(escBold(true) + "Telefono: " + escBold(false) + text(cliente.telefono));
-  if (cliente.barrio) lines.push(escBold(true) + "Barrio: " + escBold(false) + text(cliente.barrio));
-  if (cliente.direccion) lines.push(escBold(true) + "Direccion: " + escBold(false) + text(cliente.direccion));
+  lines.push(...receiptCustomerLines(cliente, ctx.width));
   if (cliente.notas) {
     lines.push(ctx.sep);
     lines.push(escBold(true) + "Notas:" + escBold(false));
@@ -2286,6 +2313,7 @@ function isRecord2(value) {
   COMANDA_FONT_SIZES,
   DEFAULT_LOGO_SCALE,
   ESC,
+  FOODLY_FOOTER_PDF_WIDTH,
   FOODLY_FOOTER_PNG,
   LOGO_SCALES,
   MAX_LOGO_HEIGHT,

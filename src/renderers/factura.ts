@@ -8,7 +8,7 @@ import type {
   ThermalRenderOptions,
 } from '../types';
 import { escBold, escCut, qrMarker } from '../escpos';
-import { receiptContactLines, receiptDetailsLines } from './receipt-header';
+import { receiptContactLines, receiptCustomerLines, receiptDetailsLines } from './receipt-header';
 import {
   AVANCE_CORTE,
   center,
@@ -42,7 +42,7 @@ export function renderFactura(factura: FacturaCerradaPayload, options: ThermalRe
   if (!fiscal) datos.push(center(factura.numero_factura || 'PEDIDO', width));
   const mesa = factura.mesa_nombre || (factura.mesa_numero ? `Mesa: ${factura.mesa_numero}` : '');
   datos.push(...receiptDetailsLines(mesa, factura.mesero, width, now, timezone));
-  renderCliente(datos, factura);
+  renderCliente(datos, factura, width);
 
   const detalle: string[] = [];
   if (fiscal) renderItemsFiscales(detalle, factura.items || [], width, desgloseImpuestos(factura) !== null);
@@ -197,23 +197,23 @@ function fiscalYaIdentifica(factura: FacturaCerradaPayload): boolean {
   return !!nombre && adqNorm.includes(normalizar(nombre));
 }
 
-function renderCliente(lines: string[], factura: FacturaCerradaPayload): void {
+function renderCliente(lines: string[], factura: FacturaCerradaPayload, width: number): void {
   // Con FE, la identificación del adquirente vive en el bloque fiscal (es la
   // que se le declaró a la DIAN). Repetirla arriba solo alarga la tirilla.
   const duplicado = fiscalYaIdentifica(factura);
   const nombre = factura.cliente;
-  if (!duplicado && nombre && nombre !== 'Consumidor final') {
-    lines.push(`Cliente: ${sanitizeText(nombre)}`);
-  }
+  lines.push(...receiptCustomerLines({
+    nombre: duplicado || nombre === 'Consumidor final' ? undefined : nombre,
+    telefono: factura.cliente_telefono,
+    direccion: factura.cliente_direccion,
+    barrio: factura.cliente_barrio,
+  }, width));
   // Trazabilidad: el documento identifica al cliente aunque el restaurante no
   // tenga facturación electrónica.
   if (!duplicado && factura.cliente_documento) {
     const sigla = TIPO_DOC_SIGLA[factura.cliente_tipo_documento ?? ''] ?? 'Doc';
     lines.push(`${sigla}: ${sanitizeText(factura.cliente_documento)}`);
   }
-  if (factura.cliente_telefono) lines.push(`Tel: ${sanitizeText(factura.cliente_telefono)}`);
-  if (factura.cliente_direccion) lines.push(`Dir: ${sanitizeText(factura.cliente_direccion)}`);
-  if (factura.cliente_barrio) lines.push(`Barrio: ${sanitizeText(factura.cliente_barrio)}`);
   if (factura.localizador) lines.push(`Localizador: ${sanitizeText(factura.localizador)}`);
 }
 

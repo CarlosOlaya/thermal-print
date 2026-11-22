@@ -12,6 +12,32 @@ export function receiptContactLines(telefono: unknown, direccion: unknown, width
     .flatMap(line => wrapWords(line, width).map(part => center(part, width)));
 }
 
+export function receiptCustomerLines(
+  customer: { nombre?: unknown; telefono?: unknown; direccion?: unknown; barrio?: unknown },
+  width: number,
+): string[] {
+  const labelValue = (label: string, value: unknown) => {
+    const text = oneLine(value);
+    return text && `${label}: ${text}`;
+  };
+  const name = labelValue('Cliente', customer.nombre);
+  const phone = labelValue('Tel', customer.telefono);
+  const address = labelValue('Dir', customer.direccion);
+  const neighborhood = labelValue('Barrio', customer.barrio);
+  const column = width >= 42 ? 25 : Math.floor(width / 2);
+  const pair = (left: string, right: string) => {
+    const leftLines = left ? wrapWords(left, column - 1) : [];
+    const rightLines = right ? wrapWords(right, width - column) : [];
+    return Array.from({ length: Math.max(leftLines.length, rightLines.length) }, (_, i) => {
+      const leftLine = leftLines[i] ?? '';
+      return rightLines[i] ? leftLine.padEnd(column) + rightLines[i] : leftLine;
+    });
+  };
+  return phone || neighborhood
+    ? [...pair(name, phone), ...pair(address, neighborhood)]
+    : [name, address].filter(Boolean).flatMap(line => wrapWords(line, width));
+}
+
 export function receiptDetailsLines(
   mesa: unknown,
   mesero: unknown,

@@ -28,7 +28,7 @@ export type LogoScale = (typeof LOGO_SCALES)[number];
 export const DEFAULT_LOGO_SCALE: LogoScale = 200;
 
 /** Recorta filas blancas y escala el logo al ancho útil sin deformarlo. */
-function rasterLogoBytes(logo?: RasterLogo, feedAfter = true): number[] {
+function rasterLogoBytes(logo?: RasterLogo): number[] {
   if (!logo) return [];
   const { widthBytes, height, data } = logo;
   if (!Number.isInteger(widthBytes) || widthBytes < 1 || widthBytes > MAX_LOGO_WIDTH_BYTES ||
@@ -66,14 +66,24 @@ function rasterLogoBytes(logo?: RasterLogo, feedAfter = true): number[] {
       }
     }
   }
+  // Separa el logo de cabecera del nombre.
+  return [...centeredRasterBytes(scaledWidthBytes, scaledHeight, raster), 0x0a];
+}
+
+function centeredRasterBytes(widthBytes: number, height: number, raster: Iterable<number>): number[] {
   return [
     0x1b, 0x61, 0x01,
-    0x1d, 0x76, 0x30, 0x00, scaledWidthBytes, 0x00, scaledHeight & 0xff, scaledHeight >> 8,
+    0x1d, 0x76, 0x30, 0x00, widthBytes & 0xff, widthBytes >> 8, height & 0xff, height >> 8,
     ...raster,
     0x1b, 0x61, 0x00,
-    ...(feedAfter ? [0x0a] : []), // Separa el logo de cabecera del nombre.
   ];
 }
+
+const footerRasterBytes = centeredRasterBytes(
+  FOODLY_FOOTER_RASTER.widthBytes,
+  FOODLY_FOOTER_RASTER.height,
+  Array.from(atob(FOODLY_FOOTER_RASTER.data), byte => byte.charCodeAt(0)),
+);
 
 export function escBold(active: boolean): string {
   return ESC + (active ? '\x45\x01' : '\x45\x00');
@@ -149,7 +159,7 @@ function textSegmentToBytes(segment: string): number[] {
       const lineBreak = segment.indexOf('\n', i);
       const end = lineBreak === -1 ? segment.length : lineBreak;
       if (isFoodlyFooterLine(segment.slice(i, end))) {
-        bytes.push(...rasterLogoBytes(FOODLY_FOOTER_RASTER, false));
+        bytes.push(...footerRasterBytes);
         i = end - 1;
         continue;
       }
