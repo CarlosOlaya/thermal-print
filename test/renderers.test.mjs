@@ -84,11 +84,11 @@ for (const columns of [32, 48]) {
     assert.ok(lines.every(line => line.length <= columns));
     assert.match(text, /Tel: \+57 300 111 2233/);
     assert.match(lines.map(line => line.trim()).join(' '), /Carrera 15 # 12-75, entrada por la Avenida Principal/);
-    assert.match(text, /Mesero: Juan Ramirez {2,}Salon 12/);
+    assert.ok(lines.includes('Salon 12' + 'Mesero: Juan Ramirez'.padStart(columns - 'Salon 12'.length)));
     const largos = render({ ...datos, mesero: 'Juan Pablo Ramirez de la Torre', mesa_nombre: 'Salon terraza de las orquideas 12' }, { columns, now })
       .replace(/\x1bE[\x00\x01]/g, '').split('\n');
     assert.ok(largos.every(line => line.length <= columns));
-    assert.match(largos.map(line => line.trim()).join(' '), /Juan Pablo Ramirez de la Torre Salon terraza de las orquideas 12/);
+    assert.match(largos.map(line => line.trim()).join(' '), /Salon terraza de las orquideas 12 Mesero: Juan Pablo Ramirez de la Torre/);
   }
   const verificacion = renderPrecuenta(datos, { columns, now });
   assert.match(verificacion, /SUBTOTAL: +\$321\.100\nSERVICIO SUGERIDO \(10%\): +\$32\.110\n\x1bE\x01TOTAL \+ SERVICIO: +\$353\.210\x1bE\x00/);

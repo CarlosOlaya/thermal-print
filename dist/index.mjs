@@ -789,18 +789,18 @@ function receiptContactLines(telefono, direccion, width) {
   const tel = oneLine(telefono);
   return [tel && `Tel: ${tel}`, oneLine(direccion)].filter(Boolean).flatMap((line) => wrapWords(line, width).map((part) => center(part, width)));
 }
-function receiptServiceLines(mesero, mesa, width) {
-  const nombreMesero = oneLine(mesero);
+function receiptServiceLines(mesa, mesero, width) {
   const nombreMesa = oneLine(mesa);
-  const izquierda = nombreMesero ? `Mesero: ${nombreMesero}` : "";
+  const nombreMesero = oneLine(mesero);
+  const derecha = nombreMesero ? `Mesero: ${nombreMesero}` : "";
   const bold = (line) => escBold(true) + line + escBold(false);
-  if (izquierda && nombreMesa && izquierda.length + 2 + nombreMesa.length <= width) {
-    const gap = " ".repeat(width - izquierda.length - nombreMesa.length);
-    return [izquierda + gap + bold(nombreMesa)];
+  if (nombreMesa && derecha && nombreMesa.length + 2 + derecha.length <= width) {
+    const gap = " ".repeat(width - nombreMesa.length - derecha.length);
+    return [bold(nombreMesa) + gap + derecha];
   }
   return [
-    ...izquierda ? wrapWords(izquierda, width) : [],
-    ...nombreMesa ? wrapWords(nombreMesa, width).map(bold) : []
+    ...nombreMesa ? wrapWords(nombreMesa, width).map(bold) : [],
+    ...derecha ? wrapWords(derecha, width) : []
   ];
 }
 
@@ -821,7 +821,7 @@ function renderFactura(factura, options = {}) {
     datos.push(`Hora:  ${formatTime(now, timezone)}`);
   }
   const mesa = factura.mesa_nombre || (factura.mesa_numero ? `Mesa: ${factura.mesa_numero}` : "");
-  datos.push(...receiptServiceLines(factura.mesero, mesa, width));
+  datos.push(...receiptServiceLines(mesa, factura.mesero, width));
   renderCliente(datos, factura);
   const detalle = [];
   if (fiscal) renderItemsFiscales(detalle, factura.items || [], width, desgloseImpuestos(factura) !== null);
@@ -1307,7 +1307,7 @@ function renderPrecuenta(data, options = {}) {
   const mesaNombre = text(data.mesa_nombre || (data.mesa_numero ? `Mesa: ${data.mesa_numero}` : ""));
   const esDelivery = /domicilio|llevar/i.test(mesaNombre);
   pushDateTime(lines, ctx);
-  lines.push(...receiptServiceLines(data.mesero, mesaNombre, ctx.width));
+  lines.push(...receiptServiceLines(mesaNombre, data.mesero, ctx.width));
   lines.push(ctx.sep);
   renderItemTable(lines, arr(data.items), ctx, "nombre", false);
   lines.push(leftRight("SUBTOTAL:", money(subtotal + descuentoMesa), ctx.width));

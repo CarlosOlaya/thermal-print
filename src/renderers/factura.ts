@@ -49,7 +49,7 @@ export function renderFactura(factura: FacturaCerradaPayload, options: ThermalRe
     datos.push(`Hora:  ${formatTime(now, timezone)}`);
   }
   const mesa = factura.mesa_nombre || (factura.mesa_numero ? `Mesa: ${factura.mesa_numero}` : '');
-  datos.push(...receiptServiceLines(factura.mesero, mesa, width));
+  datos.push(...receiptServiceLines(mesa, factura.mesero, width));
   renderCliente(datos, factura);
 
   const detalle: string[] = [];
