@@ -4,6 +4,8 @@ export interface ThermalCompraPayload extends Record<string, unknown> {
     estado: 'pendiente' | 'pagada' | 'anulada' | 'reversada';
     empresa_nombre: string;
     empresa_nit?: string | null;
+    empresa_direccion?: string | null;
+    empresa_telefono?: string | null;
     registrado_en: Date | string;
     registrado_por_nombre: string;
     proveedor_nombre?: string | null;

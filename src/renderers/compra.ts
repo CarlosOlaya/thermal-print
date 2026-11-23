@@ -1,5 +1,6 @@
 import { escBold } from '../escpos';
 import type { ThermalRenderOptions } from '../types';
+import { receiptContactLines } from './receipt-header';
 import { center, clampColumns, footer, formatDate, formatMoney, formatTime, labelMetodo, leftRight, sanitizeText, wrapWords } from '../utils';
 
 export interface ThermalCompraPayload extends Record<string, unknown> {
@@ -7,6 +8,8 @@ export interface ThermalCompraPayload extends Record<string, unknown> {
   estado: 'pendiente' | 'pagada' | 'anulada' | 'reversada';
   empresa_nombre: string;
   empresa_nit?: string | null;
+  empresa_direccion?: string | null;
+  empresa_telefono?: string | null;
   registrado_en: Date | string;
   registrado_por_nombre: string;
   proveedor_nombre?: string | null;
@@ -29,8 +32,10 @@ export function renderCompra(data: ThermalCompraPayload, options: ThermalRenderO
   const fecha = new Date(data.registrado_en);
   const estados = { pendiente: 'PENDIENTE DE PAGO', pagada: 'PAGADA', anulada: 'ANULADA', reversada: 'REVERSADA' };
   const lines = [
-    ...wrap(data.empresa_nombre).map(line => center(line, width)),
+    ...wrap(data.empresa_nombre).map(line => escBold(true) + center(line, width) + escBold(false)),
     ...(data.empresa_nit ? wrap('NIT: ' + data.empresa_nit).map(line => center(line, width)) : []),
+    ...receiptContactLines(data.empresa_telefono, data.empresa_direccion, width),
+    '-'.repeat(width),
     center('COMPROBANTE DE COMPRA', width),
     center(data.numero, width),
     escBold(true) + center(estados[data.estado], width) + escBold(false),
@@ -40,10 +45,11 @@ export function renderCompra(data: ThermalCompraPayload, options: ThermalRenderO
   if (data.proveedor_nombre) lines.push(...wrap('Proveedor: ' + data.proveedor_nombre));
   if (data.proveedor_nit) lines.push(...wrap('Doc: ' + data.proveedor_nit));
   lines.push('-'.repeat(width));
+  lines.push(leftRight('INSUMO / CANTIDAD x PRECIO', 'TOTAL', width));
   for (const item of data.lineas) {
     lines.push(...wrap(item.nombre));
     const cantidad = Number(item.cantidad).toLocaleString('es-CO', { maximumFractionDigits: 4 });
-    const medida = sanitizeText(item.unidad);
+    const medida = sanitizeText(item.unidad).replace(/\s+/g, ' ');
     const precio = cantidad + ' ' + medida + ' x $' + formatMoney(item.precio_unitario);
     const importe = '$' + formatMoney(item.subtotal);
     if (precio.length + importe.length + 1 <= width) lines.push(leftRight(precio, importe, width));
@@ -51,7 +57,11 @@ export function renderCompra(data: ThermalCompraPayload, options: ThermalRenderO
   }
   lines.push('-'.repeat(width));
   const label = data.estado === 'pendiente' ? 'TOTAL POR PAGAR' : 'TOTAL COMPRA';
-  lines.push(escBold(true) + leftRight(label, '$' + formatMoney(data.total), width) + escBold(false));
+  const total = '$' + formatMoney(data.total);
+  const totalLines = label.length + total.length + 1 <= width
+    ? [leftRight(label, total, width)]
+    : [label, total.padStart(width)];
+  lines.push(...totalLines.map(line => escBold(true) + line + escBold(false)));
   if (data.metodo_pago) lines.push(...wrap('Medio de pago: ' + labelMetodo(data.metodo_pago)));
   if (data.pagado_por_nombre) lines.push(...wrap('Pago: ' + data.pagado_por_nombre));
   lines.push(footer(width, options.footer));

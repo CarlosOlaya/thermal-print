@@ -37,14 +37,26 @@ for (const columns of [32, 48]) {
   for (const estado of ['pendiente', 'pagada', 'anulada', 'reversada']) {
     const texto = renderCompra({
       numero: 'C-0042', empresa_nombre: 'Recicladora', empresa_nit: '900123',
+      empresa_telefono: '3001234567', empresa_direccion: 'Calle 20 con carrera 30 local 123',
+      proveedor_nombre: 'Reciclador '.repeat(8), proveedor_nit: '1234567890',
       estado, registrado_en: now, registrado_por_nombre: 'José', total: 1500.25,
       lineas: [{ nombre: 'Material '.repeat(10), unidad: 'kg', cantidad: 1.2345, precio_unitario: 1215.27, subtotal: 1500.25 }],
     }, { columns, footer: '' });
     assert.ok(texto.includes('C-0042') && texto.includes('1,2345 kg') && texto.includes('$1.500,25'));
     assert.ok(texto.includes(estado === 'pendiente' ? 'TOTAL POR PAGAR' : estado.toUpperCase()));
-    assert.ok(!texto.includes('Proveedor:'));
+    assert.ok(texto.includes('Proveedor:'));
+    assert.ok(texto.includes('1234567890') && texto.includes('3001234567'));
     assert.ok(texto.replaceAll(escBold(true), '').replaceAll(escBold(false), '').split('\n').every(l => l.length <= columns));
   }
+  const grande = renderCompra({
+    numero: 'C-9999', empresa_nombre: 'Recicladora', estado: 'pendiente',
+    registrado_en: now, registrado_por_nombre: 'Ana', total: 9999999999999.99,
+    lineas: [{nombre: 'Carton', unidad: 'kg', cantidad: 99999999999.9999, precio_unitario: 9999999999999.99, subtotal: 9999999999999.99}],
+  }, {columns});
+  assert.ok(grande.includes(escBold(true) + 'TOTAL POR PAGAR'));
+  assert.ok(grande.replaceAll(escBold(true), '').replaceAll(escBold(false), '').split('\n').every(l => l.length <= columns));
+  const bytes = textToEscPosBytes(grande);
+  assert.ok(Buffer.from(bytes).includes(Buffer.from([0x1d, 0x76, 0x30])), 'compra usa el pie gráfico de Foodly');
 }
 
 // El logo guardado se imprime al doble desde el inicio y deja un avance corto al nombre.
