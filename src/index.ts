@@ -51,6 +51,7 @@ export {
   type StickerOptions,
 } from './renderers/sticker';
 export { renderFactura } from './renderers/factura';
+export { renderCompra, type ThermalCompraPayload } from './renderers/compra';
 export {
   renderCierreCaja,
   renderCorreccion,
