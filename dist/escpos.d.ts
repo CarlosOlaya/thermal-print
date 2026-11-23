@@ -31,4 +31,11 @@ export declare function escBeep(count?: number, duration?: number): string;
  * texto. `moduleSize` (3–8) ajusta el tamaño del punto: 5 en 58mm, 7 en 80mm.
  */
 export declare function qrMarker(data: string, moduleSize?: number): string;
+export interface QrRotulado {
+    data: string;
+    /** Texto corto debajo del QR */
+    rotulo: string;
+}
+/** Uno o dos QR con rótulo. El renglón del primer rótulo mide `columns`: de ahí sale el ancho. */
+export declare function qrFilaMarker(qrs: QrRotulado[], columns: number): string;
 export declare function textToEscPosBytes(text: string, options?: EscPosByteOptions): Uint8Array;

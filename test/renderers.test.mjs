@@ -155,7 +155,7 @@ for (const columns of [32, 48]) {
     cliente_barrio: cliente.barrio,
     items: [],
   }, { columns, now });
-  const lines = entregas.split('\n').slice(5).filter(line => line.trim() && !line.startsWith('=') && !isFoodlyFooterLine(line));
+  const lines = entregas.split(`\n${'-'.repeat(columns)}\n`)[0].split('\n').slice(5).filter(line => line.trim());
   const column = lines[0].indexOf('Tel:');
   assert.ok(column > 0);
   assert.equal(lines.find(line => line.startsWith('Dir:'))?.indexOf('Barrio:'), column);
@@ -170,6 +170,90 @@ for (const columns of [32, 48]) {
   const sinNombre = renderDatosCliente({ ...domicilio, cliente: { telefono: cliente.telefono, barrio: cliente.barrio } }, { columns, now });
   assert.match(sinNombre, new RegExp(`^ {${column}}Tel: ${cliente.telefono}$`, 'm'));
   assert.match(sinNombre, new RegExp(`^ {${column}}Barrio:`, 'm'));
+}
+
+// QR del domiciliario: ruta en Maps y chat del cliente, los dos en la misma fila.
+for (const columns of [32, 48]) {
+  const base = {
+    tenant_nombre: 'BRASA',
+    mesa_nombre: 'Domicilio 3',
+    cliente: { nombre: 'Ana Pérez', telefono: '310 456 7890', direccion: 'Cra 15 # 12-75', barrio: 'Ñuflo' },
+  };
+  const urls = (t) => t.split('\x1E').filter((_, i) => i % 2 === 1).map(s => s.slice(1));
+  const imagenes = (bytes) => {
+    const halladas = [];
+    for (let i = 0; i < bytes.length - 8; i++) {
+      if (bytes[i] !== 0x1d || bytes[i + 1] !== 0x76 || bytes[i + 2] !== 0x30) continue;
+      const ancho = bytes[i + 4] + bytes[i + 5] * 256;
+      const alto = bytes[i + 6] + bytes[i + 7] * 256;
+      halladas.push({ ancho: ancho * 8, alto });
+      i += 7 + ancho * alto;
+    }
+    return halladas;
+  };
+  const nativos = (bytes) => Buffer.from(bytes).toString('latin1').split('\x1d(k').length - 1;
+
+  const completa = renderDatosCliente(base, { columns, now });
+  assert.deepEqual(urls(completa), [
+    'https://www.google.com/maps/dir/?api=1&destination=Cra+15+%23+12-75,+Nuflo',
+    'https://wa.me/573104567890?text=Hola%20Ana,%20voy%20en%20camino%20con%20tu%20domicilio%20de%20BRASA',
+  ]);
+  const bytes = textToEscPosBytes(completa);
+  const [fila, firma] = imagenes(bytes);
+  assert.ok(fila.ancho <= columns * 12 && fila.alto < columns * 7, 'la fila cabe en el papel');
+  assert.deepEqual(firma, { ancho: 312, alto: 30 }, 'la firma de Foodly sigue igual');
+  assert.equal(nativos(bytes), 0, 'con los dos no va QR nativo: saldrían uno debajo del otro');
+  const salida = Buffer.from(bytes).toString('latin1');
+  const mitad = columns / 2;
+  assert.ok(salida.includes(`${' '.repeat((mitad - 4) / 2)}RUTA`.padEnd(mitad) + `${' '.repeat((mitad - 8) / 2)}WHATSAPP\n=`));
+  assert.ok(!salida.includes('wa.me'), 'la dirección del enlace no se imprime como texto');
+  assert.ok(renderPrecuenta(base, { columns, now }).endsWith(completa));
+  for (const linea of completa.split('\n')) {
+    if (!linea.includes('\x1E') && !isFoodlyFooterLine(linea)) {
+      assert.ok(linea.replace(/\x1bE[\x00\x01]|\x1C/g, '').length <= columns);
+    }
+  }
+
+  // Falta un dato: el otro sale solo, nativo y centrado. Sin ninguno, la tirilla de antes.
+  const sinTelefono = renderDatosCliente({ ...base, cliente: { ...base.cliente, telefono: '' } }, { columns, now });
+  assert.equal(urls(sinTelefono).length, 1);
+  assert.match(sinTelefono, /^ +RUTA$/m);
+  assert.doesNotMatch(sinTelefono, /WHATSAPP/);
+  const sinDireccion = renderDatosCliente({ ...base, cliente: { ...base.cliente, direccion: ' ' } }, { columns, now });
+  assert.match(urls(sinDireccion).join(), /^https:\/\/wa\.me\/573104567890/);
+  assert.doesNotMatch(sinDireccion, /RUTA/);
+  assert.equal(imagenes(textToEscPosBytes(sinDireccion)).length, 1, 'solo la firma');
+  const vacia = renderDatosCliente({ ...base, cliente: { nombre: 'Ana' } }, { columns, now });
+  assert.ok(!vacia.includes('\x1E'));
+
+  // Para llevar o una mesa: no hay recorrido.
+  for (const mesa_nombre of ['Llevar 2', 'Terraza 1']) {
+    assert.ok(!renderDatosCliente({ ...base, mesa_nombre }, { columns, now }).includes('\x1E'));
+  }
+
+  // Solo celulares: un fijo, un número incompleto o mal tecleado no tienen chat.
+  for (const telefono of ['6052821234', '2821234', '31045678901', 'no tiene']) {
+    assert.doesNotMatch(renderDatosCliente({ ...base, cliente: { ...base.cliente, telefono } }, { columns, now }), /wa\.me/, telefono);
+  }
+  for (const [telefono, numero] of [['573104567890', '573104567890'], ['+57 310 456 7890', '573104567890'], ['+13055551234', '13055551234'], ['3104567890 / 3001112233', '573104567890']]) {
+    assert.ok(renderDatosCliente({ ...base, cliente: { ...base.cliente, telefono } }, { columns, now }).includes(`wa.me/${numero}?`), telefono);
+  }
+
+  // La ciudad, si llega, nunca se pierde; una dirección enorme se recorta y sigue en una fila.
+  const larga = renderDatosCliente({
+    ...base, ciudad: 'Sincelejo', tenant_nombre: 'Restaurante de nombre larguisimo para un mensaje',
+    cliente: { ...base.cliente, direccion: 'Carrera 15 # 12-75 '.repeat(10) },
+  }, { columns, now });
+  assert.ok(urls(larga).every(u => u.length <= 213));
+  assert.match(urls(larga)[0], /,\+Sincelejo$/);
+  assert.doesNotMatch(urls(larga)[1], /larguisimo/);
+  assert.equal(imagenes(textToEscPosBytes(larga)).length, 2);
+  assert.equal(nativos(textToEscPosBytes(larga)), 0);
+
+  // Un valor con caracteres de control no abre otro QR ni manda comandos.
+  const maliciosa = renderDatosCliente({ ...base, cliente: { ...base.cliente, direccion: 'Cra 1\x1E\x1C\x1d(k\n# 2' } }, { columns, now });
+  assert.equal(urls(maliciosa).length, 2);
+  assert.ok(urls(maliciosa)[0].endsWith('Cra+1(k+%23+2,+Nuflo'));
 }
 
 const comanda = renderComanda({

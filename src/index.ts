@@ -33,10 +33,12 @@ export {
   escCut,
   escFontSize,
   escLeftMargin,
+  qrFilaMarker,
   qrMarker,
   textToEscPosBytes,
   type EscPosByteOptions,
   type LogoScale,
+  type QrRotulado,
   type RasterLogo,
 } from './escpos';
 export { center, formatDate, formatMoney, formatTime, labelMetodo, leftRight, sanitizeText } from './utils';

@@ -1,4 +1,5 @@
-import { escBold } from '../escpos';
+import { escBold, qrFilaMarker } from '../escpos';
+import { qrsDeEntrega } from './qr-entrega';
 import { receiptContactLines, receiptCustomerLines, receiptDetailsLines } from './receipt-header';
 import type {
   ThermalDocumentPayload,
@@ -106,7 +107,12 @@ export function renderDatosCliente(data: ThermalDocumentPayload, options: Therma
     lines.push(escBold(true) + 'Notas:' + escBold(false));
     lines.push(text(cliente.notas));
   }
-  lines.push('');
+  // Ayuda al domiciliario: ruta y chat del cliente. Para llevar no hay recorrido.
+  const qrs = /domicilio/i.test(text(data.mesa_nombre))
+    ? qrsDeEntrega(cliente, data.ciudad, data.tenant_nombre)
+    : [];
+  if (qrs.length) lines.push(ctx.sep, qrFilaMarker(qrs, ctx.width));
+  else lines.push('');
   lines.push(ctx.sep2);
   lines.push(footer(ctx.width, options.footer));
   return lines.join('\n');

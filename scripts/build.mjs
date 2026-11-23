@@ -3,6 +3,8 @@ import { build } from 'esbuild';
 const shared = {
   entryPoints: ['src/index.ts'],
   bundle: true,
+  // 'neutral' no mira `main`, y el codificador QR (dijkstrajs) solo trae ese campo.
+  mainFields: ['module', 'main'],
   sourcemap: true,
   target: ['es2020'],
   logLevel: 'info',

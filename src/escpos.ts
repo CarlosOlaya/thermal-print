@@ -1,4 +1,5 @@
-import { sanitizeText } from './utils';
+import { create as crearQr } from 'qrcode/lib/core/qrcode.js';
+import { center, sanitizeText } from './utils';
 import { FOODLY_FOOTER_MARKER, FOODLY_FOOTER_RASTER, isFoodlyFooterLine } from './foodly-footer';
 
 export const ESC = '\x1B';
@@ -151,6 +152,78 @@ function escQrCommandBytes(data: string, moduleSize: number): number[] {
   ];
 }
 
+export interface QrRotulado {
+  data: string;
+  /** Texto corto debajo del QR */
+  rotulo: string;
+}
+
+/**
+ * Separador (0x1C, FS) que abre el renglón entre dos QR que van en la MISMA fila. Los
+ * puentes anteriores lo descartan e imprimen los dos QR nativos uno debajo del otro,
+ * cada uno con su rótulo: la tirilla sirve igual mientras se actualizan.
+ */
+const QR_FILA = '\x1C';
+
+/** Uno o dos QR con rótulo. El renglón del primer rótulo mide `columns`: de ahí sale el ancho. */
+export function qrFilaMarker(qrs: QrRotulado[], columns: number): string {
+  const size = columns >= 42 ? 5 : 4;
+  const [a, b] = qrs.filter(qr => qr.data);
+  if (!a) return '';
+  if (!b) return `${qrMarker(a.data, size)}\n${center(a.rotulo, columns)}`;
+  return `${qrMarker(a.data, size)}\n${QR_FILA}${center(a.rotulo, columns).padEnd(columns)}\n` +
+    `${qrMarker(b.data, size)}\n${center(b.rotulo, columns)}`;
+}
+
+/**
+ * Dos QR como UNA imagen: el QR nativo siempre ocupa su propio renglón. Cada uno va
+ * centrado en su mitad del papel, con la zona blanca que pide el lector. Null si no cabe.
+ */
+function qrFilaBytes(datos: [string, string], columns: number): number[] | null {
+  try {
+    const version = Math.max(...datos.map(d => crearQr(d, { errorCorrectionLevel: 'M' }).version));
+    const [a, b] = datos.map(d => crearQr(d, { errorCorrectionLevel: 'M', version }).modules);
+    const mitad = columns * 6; // 12 puntos por columna
+    const punto = Math.min(5, Math.floor(mitad / (a.size + 6)));
+    if (punto < 3) return null;
+    const lado = a.size * punto;
+    // Se recorta lo mismo a los dos lados: la impresora centra la imagen.
+    const recorte = Math.floor((mitad - lado) / 2 / 8) * 8;
+    const widthBytes = (mitad - recorte) / 4;
+    const xA = Math.floor((mitad - lado) / 2) - recorte;
+    const blanco = punto * 4;
+    const height = lado + blanco * 2;
+    const raster = new Uint8Array(widthBytes * height);
+    for (let y = 0; y < lado; y++) {
+      const fila = Math.floor(y / punto);
+      for (let x = 0; x < lado; x++) {
+        const col = Math.floor(x / punto);
+        for (const [simbolo, x0] of [[a, xA], [b, xA + mitad]] as const) {
+          if (!simbolo.get(fila, col)) continue;
+          raster[(blanco + y) * widthBytes + ((x0 + x) >> 3)] |= 0x80 >> ((x0 + x) % 8);
+        }
+      }
+    }
+    return centeredRasterBytes(widthBytes, height, raster);
+  } catch {
+    return null;
+  }
+}
+
+/** Si los segmentos que siguen son una fila de dos QR, sus bytes (imagen y rótulos). */
+function filaDesdeSegmentos(segmentos: string[], s: number): number[] | null {
+  const primero = /^\n\x1C([^\n]+)\n$/.exec(segmentos[s + 1] ?? '');
+  const segundo = /^\n([^\n]*)/.exec(segmentos[s + 3] ?? '');
+  if (!primero || !segundo) return null;
+  const columns = primero[1].length;
+  const imagen = qrFilaBytes([segmentos[s].slice(1), segmentos[s + 2].slice(1)], columns);
+  if (!imagen) return null;
+  const mitad = columns / 2;
+  const rotulos = center(primero[1].trim(), mitad).padEnd(mitad) + center(segundo[1].trim(), mitad);
+  segmentos[s + 3] = segmentos[s + 3].slice(segundo[0].length);
+  return [...imagen, ...textSegmentToBytes(rotulos)];
+}
+
 /** Convierte un segmento de TEXTO (sin QR) a bytes ESC/POS con la whitelist */
 function textSegmentToBytes(segment: string): number[] {
   const bytes: number[] = [];
@@ -207,6 +280,12 @@ export function textToEscPosBytes(text: string, options: EscPosByteOptions = {})
   const segmentos = document.split(QR_SENTINEL);
   for (let s = 0; s < segmentos.length; s++) {
     if (s % 2 === 1) {
+      const fila = filaDesdeSegmentos(segmentos, s);
+      if (fila) {
+        bytes.push(...fila);
+        s += 2;
+        continue;
+      }
       const seg = segmentos[s];
       const moduleSize = seg.charCodeAt(0) || 6;
       const data = seg.slice(1);
